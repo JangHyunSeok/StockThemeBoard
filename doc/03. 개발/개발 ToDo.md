@@ -9,49 +9,55 @@
 ## 📋 Phase 1: 개발 환경 구축
 
 ### 1.1 프로젝트 초기 설정
-- [ ] Git 저장소 초기화
+- [x] Git 저장소 초기화
   ```bash
   git init
   git add .
   git commit -m "Initial commit"
   ```
-- [ ] `.gitignore` 파일 생성 (Python, Node.js, 환경변수)
-- [ ] README.md 작성 (프로젝트 개요, 설치 방법)
+- [x] `.gitignore` 파일 생성 (Python, Node.js, 환경변수)
+- [x] README.md 작성 (프로젝트 개요, 설치 방법)
+- [x] GitHub 원격 저장소 연결
 
 ### 1.2 Docker 환경 구축
-- [ ] `docker-compose.yml` 작성
-  - [ ] PostgreSQL 서비스 정의
-  - [ ] Redis 서비스 정의
-  - [ ] Backend 서비스 정의
-  - [ ] Frontend 서비스 정의
+- [x] Docker Desktop 설치
+- [x] `docker-compose.yml` 작성
+  - [x] PostgreSQL 서비스 정의
+  - [x] Redis 서비스 정의
+  - [x] Backend 서비스 정의
+  - [x] Frontend 서비스 정의
   - [ ] Nginx 서비스 정의 (선택적)
-- [ ] `.env.example` 파일 작성
-- [ ] Docker 네트워크 및 볼륨 설정
+- [x] `.env.example` 파일 작성
+- [x] Docker 네트워크 및 볼륨 설정
 
 ### 1.3 로컬 환경 테스트
-- [ ] `docker-compose up -d` 실행 확인
-- [ ] PostgreSQL 연결 테스트 (`psql` 또는 DBeaver)
-- [ ] Redis 연결 테스트 (`redis-cli ping`)
+- [x] `docker-compose up -d` 실행 확인
+- [x] PostgreSQL 연결 테스트 (`psql` 또는 DBeaver)
+- [x] Redis 연결 테스트 (`redis-cli ping`)
+- [x] Backend API 확인 (http://localhost:8000/docs)
+- [x] Frontend 확인 (http://localhost:3000)
 
 ---
 
 ## 🔧 Phase 2: 백엔드 개발
 
-### 2.1 FastAPI 프로젝트 생성
-- [ ] Python 가상환경 생성 (`python -m venv venv`)
-- [ ] `requirements.txt` 작성
-  - [ ] fastapi
-  - [ ] uvicorn[standard]
-  - [ ] sqlalchemy[asyncio]
-  - [ ] asyncpg
-  - [ ] redis
-  - [ ] pydantic-settings
-  - [ ] python-dotenv
-  - [ ] requests
-  - [ ] websockets
-- [ ] 디렉토리 구조 생성 (`app/`, `app/api/`, `app/core/`, `app/models/`, ...)
-- [ ] `app/main.py` 기본 FastAPI 앱 생성
-- [ ] `app/config.py` 환경변수 설정 (`Settings` 클래스)
+### 2.1 FastAPI 프로젝트 기본 구조
+- [x] Python 가상환경 생성 (`python -m venv venv`)
+- [x] `requirements.txt` 작성
+  - [x] fastapi
+  - [x] uvicorn[standard]
+  - [x] sqlalchemy[asyncio]
+  - [x] asyncpg
+  - [x] redis
+  - [x] pydantic-settings
+  - [x] python-dotenv
+  - [x] requests
+  - [x] websockets
+- [x] 디렉토리 구조 생성 (`app/`, `app/api/`, `app/core/`, `app/models/`, ...)
+- [x] `app/main.py` 기본 FastAPI 앱 생성
+- [x] `app/config.py` 환경변수 설정 (`Settings` 클래스)
+
+> **참고**: 현재 버전은 공개 접근 앱으로 사용자 인증 기능이 없습니다.
 
 ### 2.2 데이터베이스 설정
 - [ ] SQLAlchemy 비동기 엔진 설정 (`database.py`)
@@ -67,6 +73,7 @@
   ```
 
 ### 2.3 한국투자증권 API 연동
+- [x] 한국투자증권 API 사용 신청 완료
 - [ ] `core/kis_api.py` 클라이언트 작성
   - [ ] `get_access_token()` - OAuth2 토큰 발급
   - [ ] `get_stock_price(stock_code)` - 현재가 조회
@@ -275,9 +282,10 @@
 
 ## 📝 추가 작업 (선택적)
 
-### 사용자 인증 (Phase 2 기능)
+### 사용자 인증 (Phase 3 또는 향후 기능)
+> **현재 버전에서는 제외**: 공개 접근 앱으로 개발합니다.
 - [ ] JWT 기반 로그인 시스템
-- [ ] 사용자별 즐겨찾기 저장 (DB)
+- [ ] 사용자별 즐겨찾기 저장 (DB) 
 - [ ] 비밀번호 암호화 (bcrypt)
 
 ### 알림 기능
@@ -296,7 +304,7 @@
 
 | Phase | 예상 소요 시간 | 상태 |
 |-------|--------------|------|
-| Phase 1: 환경 구축 | 2-3일 | ⏳ 대기 |
+| Phase 1: 환경 구축 | 2-3일 | ✅ 거의 완료 |
 | Phase 2: 백엔드 개발 | 1-2주 | ⏳ 대기 |
 | Phase 3: 프론트엔드 개발 | 1-2주 | ⏳ 대기 |
 | Phase 4: 데이터 초기화 | 1-2일 | ⏳ 대기 |
@@ -310,8 +318,14 @@
 
 - [x] 분석 문서 작성 완료
 - [x] 설계 문서 작성 완료
-- [ ] 개발 환경 구축 시작 ← **다음 단계**
+- [/] 개발 환경 구축 진행 중
+  - [x] GitHub 원격 저장소 연결 완료
+  - [x] Docker Desktop 설치 완료
+  - [x] 한국투자증권 API 사용 신청 완료
+  - [x] Docker Compose 설정 파일 작성 완료
+  - [x] Backend/Frontend 기본 구조 생성 완료
+  - [ ] Docker Compose 실행 및 테스트 ← **다음 단계**
 
 ---
 
-**마지막 업데이트**: 2026-02-04
+**마지막 업데이트**: 2026-02-07
