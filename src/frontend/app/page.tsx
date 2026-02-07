@@ -1,57 +1,65 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useVolumeRankByTheme } from '@/hooks/use-themes';
+import ThemeSection from '@/components/ThemeSection';
 
-export default function Home() {
-    const [apiStatus, setApiStatus] = useState<string>('확인 중...');
-    const [apiData, setApiData] = useState<any>(null);
+export default function HomePage() {
+    const { data: volumeRankings, isLoading, error } = useVolumeRankByTheme();
 
-    useEffect(() => {
-        // Backend API 헬스체크
-        fetch('http://localhost:8000/health')
-            .then(res => res.json())
-            .then(data => {
-                setApiStatus('✅ 연결됨');
-                setApiData(data);
-            })
-            .catch(error => {
-                setApiStatus('❌ 연결 실패');
-                console.error('API 연결 오류:', error);
-            });
-    }, []);
+    if (error) {
+        return (
+            <div className="text-center py-12">
+                <p className="text-red-600 mb-4">❌ 데이터를 불러올 수 없습니다</p>
+                <p className="text-gray-600 text-sm">Backend API가 실행 중인지 확인하세요</p>
+            </div>
+        );
+    }
+
+    if (isLoading) {
+        return (
+            <div className="text-center py-12">
+                <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+                <p className="mt-4 text-gray-600">실시간 데이터를 불러오는 중...</p>
+            </div>
+        );
+    }
+
+    if (!volumeRankings) {
+        return (
+            <div className="text-center py-12">
+                <p className="text-gray-600">데이터가 없습니다.</p>
+            </div>
+        );
+    }
+
+    // 테마 목록 추출
+    const themeNames = Object.keys(volumeRankings);
+
+    if (themeNames.length === 0) {
+        return (
+            <div className="text-center py-12">
+                <p className="text-gray-600">등록된 테마가 없습니다.</p>
+            </div>
+        );
+    }
 
     return (
-        <main style={{ padding: '2rem', fontFamily: 'system-ui, sans-serif' }}>
-            <h1>📊 StockThemeBoard</h1>
-            <p>주식 테마별 종목 실시간 모니터링 대시보드</p>
-
-            <div style={{
-                marginTop: '2rem',
-                padding: '1rem',
-                border: '1px solid #ddd',
-                borderRadius: '8px',
-                backgroundColor: '#f9f9f9'
-            }}>
-                <h2>🔌 Backend API 상태</h2>
-                <p><strong>상태:</strong> {apiStatus}</p>
-                {apiData && (
-                    <div>
-                        <p><strong>환경:</strong> {apiData.environment}</p>
-                        <p><strong>상태:</strong> {apiData.status}</p>
-                    </div>
-                )}
+        <div>
+            <div className="mb-4">
+                <h1 className="text-2xl font-bold text-gray-900 mb-1">실시간 거래 상위 종목</h1>
+                <p className="text-sm text-gray-600">테마별 거래대금 상위 종목 (실시간)</p>
             </div>
 
-            <div style={{ marginTop: '2rem' }}>
-                <h2>📋 다음 단계</h2>
-                <ul>
-                    <li>✅ Docker Compose 환경 구축 완료</li>
-                    <li>⏳ 데이터베이스 모델 설계</li>
-                    <li>⏳ 한국투자증권 API 연동</li>
-                    <li>⏳ REST API 구현</li>
-                    <li>⏳ WebSocket 실시간 연동</li>
-                </ul>
+            {/* 모바일: 2열, 데스크톱: 3열 */}
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+                {themeNames.map((themeName) => (
+                    <ThemeSection key={themeName} themeName={themeName} />
+                ))}
             </div>
-        </main>
+
+            <div className="mt-4 text-center text-xs text-gray-500">
+                💡 거래대금 상위 종목이 자동으로 갱신됩니다 (60초)
+            </div>
+        </div>
     );
 }

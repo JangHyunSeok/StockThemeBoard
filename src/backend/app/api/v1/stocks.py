@@ -1,10 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
+import json
 
 from app.database import get_db
 from app.crud import stock as crud_stock
 from app.schemas.stock import StockCreate, StockResponse
+from app.schemas.stock_quote import StockQuote
+from app.services.kis_client import get_kis_client
+from app.services.redis_client import get_cache, set_cache
 
 router = APIRouter()
 
@@ -66,3 +70,57 @@ async def create_stock(
         )
     
     return await crud_stock.create_stock(db, stock=stock)
+
+
+# === 실시간 시세 조회 API ===
+
+@router.get("/{code}/quote", response_model=StockQuote, summary="실시간 시세 조회")
+async def get_stock_quote(code: str, db: AsyncSession = Depends(get_db)):
+    """
+    한국투자증권 API를 통해 실시간 주식 시세를 조회합니다.
+    
+    - **code**: 종목코드 (6자리)
+    
+    캐싱: 60초간 Redis에 캐시됨
+    """
+    # 종목코드 유효성 검사
+    if len(code) != 6 or not code.isdigit():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="종목코드는 6자리 숫자여야 합니다"
+        )
+    
+    # Redis 캐시 확인
+    cache_key = f"quote:{code}"
+    cached_data = await get_cache(cache_key)
+    
+    if cached_data:
+        # 캐시된 데이터 반환
+        quote_dict = json.loads(cached_data)
+        return StockQuote(**quote_dict)
+    
+    # KIS API 클라이언트에서 시세 조회
+    try:
+        kis_client = await get_kis_client()
+        quote_data = await kis_client.get_stock_quote(code)
+        
+        # DB에서 종목명 조회
+        stock = await crud_stock.get_stock_by_code(db, code=code)
+        if stock:
+            quote_data["stock_name"] = stock.name
+        else:
+            quote_data["stock_name"] = f"종목({code})"  # DB에 없으면 기본값
+        
+        # StockQuote 객체 생성
+        quote = StockQuote(**quote_data)
+        
+        # Redis에 캐시 (60초)
+        await set_cache(cache_key, quote.model_dump_json(), ttl=60)
+        
+        return quote
+    
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"시세 조회 실패: {str(e)}"
+        )
