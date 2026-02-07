@@ -6,5 +6,6 @@ ORM 모델 패키지
 from app.models.theme import Theme
 from app.models.stock import Stock
 from app.models.theme_stock import ThemeStock
+from app.models.daily_ranking import DailyRanking
 
-__all__ = ["Theme", "Stock", "ThemeStock"]
+__all__ = ["Theme", "Stock", "ThemeStock", "DailyRanking"]

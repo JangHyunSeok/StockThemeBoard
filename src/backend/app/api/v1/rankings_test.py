@@ -3,6 +3,7 @@
 """
 from fastapi import APIRouter
 from typing import Dict, List
+from collections import OrderedDict
 import random
 
 router = APIRouter()
@@ -33,17 +34,22 @@ THEME_KEYWORDS = {
 
 @router.get("/volume-rank-by-theme-test")
 async def get_volume_rank_by_theme_test():
-    """테스트용 거래량 순위 API (더미 데이터)"""
+    """테스트용 거래량 순위 API (더미 데이터, 거래대금 순 정렬)"""
     
-    result = {}
+    # 테마별 종목 및 거래대금 생성
+    theme_stocks = {}
+    theme_totals = {}
     
     for theme_name, keywords in THEME_KEYWORDS.items():
-        theme_stocks = []
+        theme_stocks[theme_name] = []
+        total_trading_value = 0
+        
         for i, keyword in enumerate(keywords[:4], 1):  # 최대 4개
             # 해당 키워드를 포함하는 종목 찾기
             stock = next((s for s in DUMMY_STOCKS if keyword in s["name"]), None)
             if stock:
-                theme_stocks.append({
+                trading_value = random.randint(1000000000, 100000000000)
+                stock_data = {
                     "code": stock["code"],
                     "name": stock["name"],
                     "rank": i,
@@ -51,9 +57,23 @@ async def get_volume_rank_by_theme_test():
                     "change_price": random.randint(-5000, 5000),
                     "change_rate": round(random.uniform(-5.0, 5.0), 2),
                     "volume": random.randint(1000000, 10000000),
-                    "trading_value": random.randint(1000000000, 100000000000),
-                })
+                    "trading_value": trading_value,
+                }
+                theme_stocks[theme_name].append(stock_data)
+                total_trading_value += trading_value
         
-        result[theme_name] = theme_stocks
+        theme_totals[theme_name] = total_trading_value
+    
+    # 테마를 총 거래대금 순으로 정렬
+    sorted_themes = sorted(
+        theme_totals.items(),
+        key=lambda x: x[1],
+        reverse=True
+    )
+    
+    # 정렬된 순서로 결과 생성
+    result = OrderedDict()
+    for theme_name, _ in sorted_themes:
+        result[theme_name] = theme_stocks[theme_name]
     
     return result

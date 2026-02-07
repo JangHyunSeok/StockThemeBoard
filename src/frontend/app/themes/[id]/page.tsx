@@ -4,6 +4,7 @@ import { useVolumeRankByTheme } from '@/hooks/use-themes';
 import StockRow from '@/components/StockRow';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
+import { isMarketClosed } from '@/lib/utils';
 
 export default function ThemePage() {
     const params = useParams();
@@ -76,9 +77,11 @@ export default function ThemePage() {
             </div>
 
             {/* 자동 갱신 안내 */}
-            <div className="mt-4 text-center text-sm text-gray-500">
-                💡 데이터는 60초마다 자동으로 갱신됩니다
-            </div>
+            {!isMarketClosed() && (
+                <div className="mt-4 text-center text-sm text-gray-500">
+                    💡 데이터는 10초마다 자동으로 갱신됩니다
+                </div>
+            )}
         </div>
     );
 }
