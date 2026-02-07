@@ -21,7 +21,9 @@ async def get_theme_by_id(db: AsyncSession, theme_id: UUID) -> Optional[Theme]:
     """특정 테마 조회 (종목 포함)"""
     result = await db.execute(
         select(Theme)
-        .options(selectinload(Theme.theme_stocks))
+        .options(
+            selectinload(Theme.theme_stocks).selectinload(ThemeStock.stock)
+        )
         .where(Theme.id == theme_id)
     )
     return result.scalar_one_or_none()

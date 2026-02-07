@@ -21,5 +21,20 @@ class Theme(Base):
     # 관계 (many-to-many through ThemeStock)
     theme_stocks = relationship("ThemeStock", back_populates="theme", cascade="all, delete-orphan")
     
+    @property
+    def stocks(self):
+        """테마의 종목 목록 반환 (가중치 포함)"""
+        from app.schemas.theme import StockInTheme
+        result = []
+        for ts in self.theme_stocks:
+            if ts.stock:
+                result.append(StockInTheme(
+                    code=ts.stock.code,
+                    name=ts.stock.name,
+                    market=ts.stock.market,
+                    weight=ts.weight
+                ))
+        return result
+    
     def __repr__(self):
         return f"<Theme(id={self.id}, name='{self.name}')>"
