@@ -2,6 +2,7 @@
 
 import { useVolumeRankByTheme } from '@/hooks/use-themes';
 import ThemeSection from '@/components/ThemeSection';
+import { isMarketClosed } from '@/lib/utils';
 
 export default function HomePage() {
     const { data: volumeRankings, isLoading, error } = useVolumeRankByTheme();
@@ -50,16 +51,18 @@ export default function HomePage() {
                 <p className="text-sm text-gray-600">테마별 거래대금 상위 종목 (실시간)</p>
             </div>
 
-            {/* 모바일: 2열, 데스크톱: 3열 */}
-            <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+            {/* 1열 그리드로 변경 */}
+            <div className="grid grid-cols-1 gap-3">
                 {themeNames.map((themeName) => (
                     <ThemeSection key={themeName} themeName={themeName} />
                 ))}
             </div>
 
-            <div className="mt-4 text-center text-xs text-gray-500">
-                💡 거래대금 상위 종목이 자동으로 갱신됩니다 (60초)
-            </div>
+            {!isMarketClosed() && (
+                <div className="mt-4 text-center text-xs text-gray-500">
+                    💡 거래대금 상위 종목이 자동으로 갱신됩니다 (10초)
+                </div>
+            )}
         </div>
     );
 }

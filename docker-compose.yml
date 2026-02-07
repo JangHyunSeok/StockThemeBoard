@@ -16,7 +16,7 @@ services:
     networks:
       - stocktheme-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U stockuser -d stocktheme"]
+      test: [ "CMD-SHELL", "pg_isready -U stockuser -d stocktheme" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -32,7 +32,7 @@ services:
     networks:
       - stocktheme-network
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: [ "CMD", "redis-cli", "ping" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -81,7 +81,20 @@ services:
       - stocktheme-network
     depends_on:
       - backend
-    command: npm run dev
+    command: sh -c "npm install && npm run dev"
+
+  # Docker Monitoring (Portainer)
+  portainer:
+    image: portainer/portainer-ce:latest
+    container_name: stocktheme-portainer
+    restart: always
+    ports:
+      - "9000:9000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer_data:/data
+    networks:
+      - stocktheme-network
 
 networks:
   stocktheme-network:
@@ -90,3 +103,4 @@ networks:
 volumes:
   postgres-data:
   redis-data:
+  portainer_data:

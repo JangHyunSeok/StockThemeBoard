@@ -1,16 +1,48 @@
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, status, Depends
 from typing import List, Dict
+from collections import OrderedDict
+from sqlalchemy.ext.asyncio import AsyncSession
+from datetime import datetime, date, timedelta
 
 from app.services.kis_client import get_kis_client
 from app.services.redis_client import get_cache, set_cache
 from app.schemas.stock_ranking import StockRanking
+from app.crud import daily_ranking as crud_daily_ranking
+from app.database import get_db
 import json
 
 
 router = APIRouter()
 
 
-# 테마별 키워드 매핑
+def is_weekend() -> bool:
+    """주말 여부 확인 (간단 버전)"""
+    today = datetime.now()
+    return today.weekday() >= 5  # 5=토요일, 6=일요일
+
+
+def is_after_market_close() -> bool:
+    """장 마감 시간(15:30) 이후 확인"""
+    now = datetime.now()
+    return now.hour > 15 or (now.hour == 15 and now.minute >= 30)
+
+
+def get_last_weekday() -> date:
+    """마지막 평일 날짜 조회"""
+    today = datetime.now().date()
+    current = today
+    
+    # 최대 7일 전까지 검색
+    for _ in range(7):
+        dt = datetime.combine(current, datetime.min.time())
+        if dt.weekday() < 5:  # 평일
+            return current
+        current -= timedelta(days=1)
+    
+    return today
+
+
+# 테마별 키워드 매핑 (분류용)
 THEME_KEYWORDS = {
     "인공지능(AI)": ["AI", "인공지능", "NVIDIA", "삼성전자", "SK하이닉스", "네이버", "카카오"],
     "반도체": ["반도체", "삼성전자", "SK하이닉스", "DB하이텍", "SK스퀘어"],
@@ -32,13 +64,46 @@ def match_theme(stock_name: str) -> List[str]:
     return matched_themes
 
 
-@router.get("/volume-rank-by-theme")
-async def get_volume_rank_by_theme():
-    """테마별 거래량 상위 종목 조회
+def classify_and_sort_by_theme(rankings: List[Dict]) -> Dict[str, List[Dict]]:
+    """테마별 분류 및 거래대금 순 정렬"""
+    theme_stocks: Dict[str, List[Dict]] = {}
     
-    각 테마별로 거래량 상위 종목을 최대 15개씩 반환
-    """
-    # 캐시 확인
+    for stock_data in rankings:
+        stock_name = stock_data["name"]
+        matched_themes = match_theme(stock_name)
+        
+        for theme_name in matched_themes:
+            if theme_name not in theme_stocks:
+                theme_stocks[theme_name] = []
+            
+            if len(theme_stocks[theme_name]) < 15:
+                theme_stocks[theme_name].append(stock_data)
+    
+    # 각 테마의 총 거래대금 계산
+    theme_totals = {}
+    for theme_name, stocks in theme_stocks.items():
+        total_trading_value = sum(stock["trading_value"] for stock in stocks)
+        theme_totals[theme_name] = total_trading_value
+    
+    # 테마를 총 거래대금 순으로 정렬
+    sorted_themes = sorted(
+        theme_totals.items(),
+        key=lambda x: x[1],
+        reverse=True
+    )
+    
+    # 정렬된 순서로 결과 생성
+    result = OrderedDict()
+    for theme_name, _ in sorted_themes:
+        stocks = theme_stocks[theme_name]
+        result[theme_name] = [StockRanking(**stock).model_dump() for stock in stocks]
+    
+    return result
+
+
+@router.get("/volume-rank-by-theme")
+async def get_volume_rank_by_theme(db: AsyncSession = Depends(get_db)):
+    """테마별 거래량 상위 종목 조회 (영업일/휴일 대응)"""
     cache_key = "volume_rank_by_theme"
     cached_data = await get_cache(cache_key)
     
@@ -46,30 +111,30 @@ async def get_volume_rank_by_theme():
         return json.loads(cached_data)
     
     try:
-        # KIS API에서 거래량 상위 100개 조회
-        kis_client = await get_kis_client()
-        rankings = await kis_client.get_volume_rank(limit=100)
+        rankings = []
         
-        # 테마별로 분류
-        theme_stocks: Dict[str, List[StockRanking]] = {
-            theme: [] for theme in THEME_KEYWORDS.keys()
-        }
-        
-        for stock_data in rankings:
-            stock_name = stock_data["name"]
-            matched_themes = match_theme(stock_name)
+        if not is_weekend():
+            # 평일: KIS API 조회
+            kis_client = await get_kis_client()
+            rankings = await kis_client.get_volume_rank(limit=100)
             
-            for theme_name in matched_themes:
-                if len(theme_stocks[theme_name]) < 15:  # 테마당 최대 15개
-                    theme_stocks[theme_name].append(StockRanking(**stock_data))
+            # 15:30 이후면 DB에 저장
+            if is_after_market_close():
+                today = datetime.now().date()
+                await crud_daily_ranking.save_daily_rankings(db, today, rankings)
+        else:
+            # 주말: 마지막 평일 DB 조회
+            last_weekday = get_last_weekday()
+            rankings = await crud_daily_ranking.get_rankings_by_date(db, last_weekday)
+            
+            if not rankings:
+                rankings = []
         
-        # 딕셔너리로 변환
-        result = {}
-        for theme_name, stocks in theme_stocks.items():
-            result[theme_name] = [stock.model_dump() for stock in stocks]
+        # 테마별 분류 및 정렬
+        result = classify_and_sort_by_theme(rankings)
         
-        # 캐시 저장 (60초)
-        await set_cache(cache_key, json.dumps(result, ensure_ascii=False), ttl=60)
+        # 캐시 저장 (10초)
+        await set_cache(cache_key, json.dumps(result, ensure_ascii=False), ttl=10)
         
         return result
     

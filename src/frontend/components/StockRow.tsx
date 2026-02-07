@@ -16,9 +16,9 @@ export default function StockRow({ stock, rank }: StockRowProps) {
 
     const formatValue = (value: number) => {
         if (value >= 100000000) { // 1억 이상
-            return `${(value / 100000000).toFixed(0)}억`;
+            return `${Math.floor(value / 100000000).toLocaleString()}억`;
         } else if (value >= 10000) { // 1만 이상
-            return `${(value / 10000).toFixed(0)}만`;
+            return `${Math.floor(value / 10000).toLocaleString()}만`;
         }
         return value.toLocaleString();
     };
@@ -42,7 +42,7 @@ export default function StockRow({ stock, rank }: StockRowProps) {
                     {stock.current_price.toLocaleString()}원
                 </div>
 
-                {/* 우측 하단: 거래대금 */}
+                {/* 우측 하단: 거래대금 (천단위 콤마) */}
                 <div className="text-right text-xs text-gray-600">
                     {formatValue(stock.trading_value)}
                 </div>
