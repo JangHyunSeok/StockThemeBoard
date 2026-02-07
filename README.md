@@ -296,10 +296,5 @@ MIT License
 
 ---
 
-<<<<<<< HEAD
 **Last Updated**: 2026-02-08
 **Version**: 1.0.1
-=======
-**Last Updated**: 2026-02-07
-**Version**: 1.0.0
->>>>>>> d742f28312fda76a4b03b263f162f63e2c219d8f
