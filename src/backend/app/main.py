@@ -1,12 +1,26 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.api.v1 import api_router
+from app.scheduler.manager import start_scheduler, shutdown_scheduler
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    애플리케이션 수명 주기 관리
+    - 시작: 스케줄러 실행
+    - 종료: 스케줄러 중지
+    """
+    start_scheduler()
+    yield
+    shutdown_scheduler()
 
 app = FastAPI(
     title="StockThemeBoard API",
     description="주식 테마별 종목 실시간 모니터링 API",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan
 )
 
 # CORS 설정

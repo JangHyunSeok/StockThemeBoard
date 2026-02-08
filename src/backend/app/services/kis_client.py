@@ -114,6 +114,7 @@ class KISClient:
             "high_price": int(output.get("stck_hgpr", 0)),         # 고가
             "low_price": int(output.get("stck_lwpr", 0)),          # 저가
             "volume": int(output.get("acml_vol", 0)),              # 누적 거래량
+            "trading_value": int(output.get("acml_tr_pbmn", 0)),   # 누적 거래대금
             "timestamp": datetime.now()
         }
     

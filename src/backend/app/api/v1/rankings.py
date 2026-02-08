@@ -3,6 +3,8 @@ from typing import List, Dict
 from collections import OrderedDict
 from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime, date, timedelta
+import asyncio
+import json
 
 from app.services.kis_client import get_kis_client
 from app.services.redis_client import get_cache, set_cache
@@ -101,6 +103,10 @@ def classify_and_sort_by_theme(rankings: List[Dict]) -> Dict[str, List[Dict]]:
     return result
 
 
+from app.core.utils import is_market_open, get_last_market_date
+
+# ... (기존 코드 유지) ...
+
 @router.get("/volume-rank-by-theme")
 async def get_volume_rank_by_theme(db: AsyncSession = Depends(get_db)):
     """테마별 거래량 상위 종목 조회 (영업일/휴일 대응)"""
@@ -113,8 +119,11 @@ async def get_volume_rank_by_theme(db: AsyncSession = Depends(get_db)):
     try:
         rankings = []
         
-        if not is_weekend():
-            # 평일: KIS API 조회
+        # 개장일 여부 확인 (주말 + 공휴일 체크)
+        market_open = is_market_open()
+        
+        if market_open:
+            # 개장일: KIS API 조회
             kis_client = await get_kis_client()
             rankings = await kis_client.get_volume_rank(limit=100)
             
@@ -123,18 +132,57 @@ async def get_volume_rank_by_theme(db: AsyncSession = Depends(get_db)):
                 today = datetime.now().date()
                 await crud_daily_ranking.save_daily_rankings(db, today, rankings)
         else:
-            # 주말: 마지막 평일 DB 조회
-            last_weekday = get_last_weekday()
-            rankings = await crud_daily_ranking.get_rankings_by_date(db, last_weekday)
+            # 휴장일: 가장 최근 개장일 DB 조회
+            last_market_date = get_last_market_date()
+            rankings = await crud_daily_ranking.get_rankings_by_date(db, last_market_date)
             
             if not rankings:
                 rankings = []
+            
+            # 실시간 시세 업데이트 (병렬 처리)
+            if rankings:
+                try:
+                    kis_client = await get_kis_client()
+                    
+                    # 1. 토큰 미리 확보 (Concurrency Issue 방지)
+                    await kis_client.get_access_token()
+                    
+                    # 2. 업데이트 함수 정의
+                    async def update_quote(ranking):
+                        try:
+                            # DB의 종목 코드로 실시간 시세 조회
+                            quote = await kis_client.get_stock_quote(ranking['code'])
+                            
+                            # 순위는 유지하되, 가격/거래량 정보는 실시간 데이터로 덮어쓰기
+                            ranking['current_price'] = quote['current_price']
+                            ranking['change_price'] = quote['change_price']
+                            ranking['change_rate'] = quote['change_rate']
+                            ranking['volume'] = quote['volume']
+                            ranking['trading_value'] = quote.get('trading_value', 0)
+                            
+                        except Exception as e:
+                            # 개별 종목 조회 실패 시 로그만 남기고 기존 DB 데이터 유지
+                            print(f"[Warn] 실시간 시세 조회 실패 ({ranking.get('name', '')}): {str(e)}")
+
+                    # 3. 청크 단위 병렬 실행 (Rate Limit 고려)
+                    # 실전투자: 초당 20건 제한 / 모의투자: 초당 2건 제한
+                    # 성능 개선을 위해 20개씩 병렬 호출하되, 텀을 아주 짧게 둡니다.
+                    CHUNK_SIZE = 20
+                    for i in range(0, len(rankings), CHUNK_SIZE):
+                        chunk = rankings[i:i + CHUNK_SIZE]
+                        await asyncio.gather(*[update_quote(r) for r in chunk])
+                        # API 과부하 방지를 위한 짧은 대기 (0.05초)
+                        await asyncio.sleep(0.05)
+                        
+                except Exception as e:
+                    print(f"[Error] 실시간 시세 업데이트 프로세스 실패: {str(e)}")
+                    # 전체 프로세스 실패 시에도 DB에 있는 기존 데이터는 반환
         
         # 테마별 분류 및 정렬
         result = classify_and_sort_by_theme(rankings)
         
-        # 캐시 저장 (10초)
-        await set_cache(cache_key, json.dumps(result, ensure_ascii=False), ttl=10)
+        # 캐시 저장 (5초 - 실시간성 우선)
+        await set_cache(cache_key, json.dumps(result, ensure_ascii=False), ttl=5)
         
         return result
     
