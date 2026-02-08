@@ -141,7 +141,8 @@ REDIS_URL=redis://redis:6379/0
 cd src/frontend
 npm install
 npm run dev
-# 접속: http://localhost:3000 (또는 3001)
+# 접속: http://localhost:3000
+# 모바일/외부 접속: http://[PC_IP]:3000 (Proxy 설정 완료)
 ```
 
 #### 옵션 B: Docker Compose 실행 (백엔드/DB 필수)
@@ -297,4 +298,4 @@ MIT License
 ---
 
 **Last Updated**: 2026-02-08
-**Version**: 1.0.1
+**Version**: 1.0.2 (UI 개선 & 외부 접속 지원)
