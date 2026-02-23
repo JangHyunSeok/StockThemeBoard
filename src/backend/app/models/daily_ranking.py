@@ -14,6 +14,7 @@ class DailyRanking(Base):
     trade_date = Column(Date, nullable=False, index=True, comment="거래일")
     stock_code = Column(String(10), nullable=False, comment="종목코드")
     stock_name = Column(String(100), nullable=False, comment="종목명")
+    market_type = Column(String(10), nullable=False, server_default='KRX', comment="시장구분 (KRX/NXT)")
     rank = Column(Integer, nullable=False, comment="순위")
     current_price = Column(Integer, nullable=False, comment="현재가")
     change_price = Column(Integer, nullable=False, comment="전일대비")
@@ -22,10 +23,10 @@ class DailyRanking(Base):
     trading_value = Column(BigInteger, nullable=False, comment="거래대금")
     created_at = Column(DateTime, nullable=False, server_default=func.now(), comment="생성일시")
     
-    # 복합 유니크 제약: 같은 날짜의 같은 종목은 중복 불가
+    # 복합 유니크 제약: 같은 날짜의 같은 종목이라도 시장구분이 다르면 허용 (KRX/NXT 별도 저장)
     __table_args__ = (
-        UniqueConstraint('trade_date', 'stock_code', name='uq_daily_ranking_date_code'),
-        Index('idx_trade_date_rank', 'trade_date', 'rank'),  # 날짜+순위 인덱스
+        UniqueConstraint('trade_date', 'stock_code', 'market_type', name='uq_daily_ranking_date_code_market'),
+        Index('idx_trade_date_market_rank', 'trade_date', 'market_type', 'rank'),  # 날짜+시장+순위 인덱스
     )
     
     def __repr__(self):

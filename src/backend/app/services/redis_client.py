@@ -33,8 +33,12 @@ async def set_cache(key: str, value: str, ttl: int = 60) -> None:
         value: 캐시 값
         ttl: 유효기간 (초), 기본 60초
     """
-    client = await get_redis_client()
-    await client.setex(key, ttl, value)
+    try:
+        client = await get_redis_client()
+        await client.setex(key, ttl, value)
+    except Exception as e:
+        # Redis 에러 시 로깅만 하고 계속 진행
+        print(f"[WARNING] Redis cache write failed: {type(e).__name__}: {str(e)}")
 
 
 async def delete_cache(key: str) -> None:

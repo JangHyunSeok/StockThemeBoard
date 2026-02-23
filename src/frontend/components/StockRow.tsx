@@ -24,27 +24,35 @@ export default function StockRow({ stock, rank }: StockRowProps) {
     };
 
     return (
-        <div className="py-3 px-2 hover:bg-gray-50 rounded">
-            <div className="grid grid-cols-2 gap-2">
-                {/* 좌측 상단: 종목명 */}
-                <div className="font-medium text-gray-900 text-sm">
-                    {rank}. {stock.name}
+        <div className="py-1.5 px-2 hover:bg-gray-50 rounded border-b border-gray-50 last:border-0">
+            <div className="flex items-center justify-between">
+                {/* 좌측: 순위 및 종목명 */}
+                <div className="flex items-center gap-2 flex-1 min-w-0">
+                    <span className="text-xs font-bold text-gray-500 w-4">{rank}</span>
+                    <span className="text-sm font-medium text-gray-900 truncate">{stock.name}</span>
                 </div>
 
-                {/* 우측 상단: 등락률 */}
-                <div className={`text-right font-bold text-sm ${priceColor}`}>
-                    {stock.change_rate > 0 ? '▲' : stock.change_rate < 0 ? '▼' : ''}
-                    {stock.change_rate > 0 ? '+' : ''}{stock.change_rate.toFixed(2)}%
-                </div>
+                {/* 우측: 가격 정보 */}
+                <div className="flex items-center gap-3 text-right">
+                    {/* 거래대금 */}
+                    <div className="text-xs text-gray-500 font-medium">
+                        {formatValue(stock.trading_value)}
+                        {stock.trading_value_change_rate !== null && stock.trading_value_change_rate !== undefined && (
+                            <span className="text-[10px] text-orange-500 ml-1">
+                                ({stock.trading_value_change_rate.toFixed(0)}%)
+                            </span>
+                        )}
+                    </div>
 
-                {/* 좌측 하단: 현재가 */}
-                <div className={`font-semibold text-sm ${priceColor}`}>
-                    {stock.current_price.toLocaleString()}원
-                </div>
-
-                {/* 우측 하단: 거래대금 (천단위 콤마) */}
-                <div className="text-right text-xs text-gray-600">
-                    {formatValue(stock.trading_value)}
+                    {/* 현재가 및 등락률 */}
+                    <div className="flex flex-col items-end min-w-[60px]">
+                        <span className={`text-xs font-semibold ${priceColor}`}>
+                            {stock.current_price.toLocaleString()}
+                        </span>
+                        <span className={`text-[10px] ${priceColor}`}>
+                            {stock.change_rate > 0 ? '+' : ''}{stock.change_rate.toFixed(2)}%
+                        </span>
+                    </div>
                 </div>
             </div>
         </div>

@@ -1,5 +1,5 @@
-from fastapi import APIRouter, HTTPException, status, Depends
-from typing import List, Dict
+from fastapi import APIRouter, HTTPException, status, Depends, Query
+from typing import List, Dict, Optional
 from collections import OrderedDict
 from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime, date, timedelta
@@ -11,7 +11,8 @@ from app.services.redis_client import get_cache, set_cache
 from app.schemas.stock_ranking import StockRanking
 from app.crud import daily_ranking as crud_daily_ranking
 from app.database import get_db
-import json
+from app.core.utils import is_market_open, get_last_market_date, get_current_market_type
+from app.core.themes import SECTOR_OVERRIDE_MAP
 
 
 router = APIRouter()
@@ -44,76 +45,131 @@ def get_last_weekday() -> date:
     return today
 
 
-# 테마별 키워드 매핑 (분류용)
-THEME_KEYWORDS = {
-    "인공지능(AI)": ["AI", "인공지능", "NVIDIA", "삼성전자", "SK하이닉스", "네이버", "카카오"],
-    "반도체": ["반도체", "삼성전자", "SK하이닉스", "DB하이텍", "SK스퀘어"],
-    "2차전지": ["배터리", "LG에너지솔루션", "에코프로", "포스코퓨처엠", "삼성SDI"],
-    "바이오/헬스케어": ["바이오", "제약", "셀트리온", "삼성바이오로직스", "SK바이오팜"],
-    "전기차": ["전기차", "현대차", "기아", "현대모비스", "LG전자"],
-    "2차전지 소재": ["에코프로", "포스코퓨처엠", "LG화학", "SK", "엘앤에프"],
-}
+# ──────────────────────────────────────────────────────────────────────────────
+# 종목코드 → 업종명 매핑은 KIS API(bstp_kor_isnm)에서 실시간으로 조회
+# Redis에 24시간 캐시하여 성능 보장
+# ──────────────────────────────────────────────────────────────────────────────
+SECTOR_MAP_CACHE_PREFIX = "sector_map:"
+SECTOR_MAP_CACHE_TTL = 86400  # 24시간
 
 
-def match_theme(stock_name: str) -> List[str]:
-    """종목명으로 테마 매칭"""
-    matched_themes = []
-    for theme_name, keywords in THEME_KEYWORDS.items():
-        for keyword in keywords:
-            if keyword in stock_name:
-                matched_themes.append(theme_name)
-                break
-    return matched_themes
+async def get_sector_map_from_cache_or_api(
+    rankings: List[Dict],
+    kis_client,
+    market_code: str
+) -> Dict[str, str]:
+    """
+    종목코드 → 업종명 매핑 반환
+    우선순위:
+      1. SECTOR_OVERRIDE_MAP (항상 최우선 — 캐시/API 무관)
+      2. Redis 캐시 (24h TTL)
+      3. KIS get_stock_quote() API 호출
+    """
+    result: Dict[str, str] = {}
+    miss_codes: List[str] = []
 
+    for stock in rankings:
+        code = stock["code"]
+        # 1순위: 오버라이드 맵 (캐시보다 항상 우선)
+        if code in SECTOR_OVERRIDE_MAP:
+            result[code] = SECTOR_OVERRIDE_MAP[code]
+            continue
+        # 2순위: Redis 캐시
+        cached = await get_cache(f"{SECTOR_MAP_CACHE_PREFIX}{code}")
+        if cached:
+            result[code] = cached
+        else:
+            miss_codes.append(code)
 
-def classify_and_sort_by_theme(rankings: List[Dict]) -> Dict[str, List[Dict]]:
-    """테마별 분류 및 거래대금 순 정렬"""
-    theme_stocks: Dict[str, List[Dict]] = {}
-    
-    for stock_data in rankings:
-        stock_name = stock_data["name"]
-        matched_themes = match_theme(stock_name)
-        
-        for theme_name in matched_themes:
-            if theme_name not in theme_stocks:
-                theme_stocks[theme_name] = []
-            
-            if len(theme_stocks[theme_name]) < 15:
-                theme_stocks[theme_name].append(stock_data)
-    
-    # 각 테마의 총 거래대금 계산
-    theme_totals = {}
-    for theme_name, stocks in theme_stocks.items():
-        total_trading_value = sum(stock["trading_value"] for stock in stocks)
-        theme_totals[theme_name] = total_trading_value
-    
-    # 테마를 총 거래대금 순으로 정렬
-    sorted_themes = sorted(
-        theme_totals.items(),
-        key=lambda x: x[1],
-        reverse=True
-    )
-    
-    # 정렬된 순서로 결과 생성
-    result = OrderedDict()
-    for theme_name, _ in sorted_themes:
-        stocks = theme_stocks[theme_name]
-        result[theme_name] = [StockRanking(**stock).model_dump() for stock in stocks]
-    
+    if miss_codes:
+        print(f"[DEBUG] Sector cache miss for {len(miss_codes)} stocks: {miss_codes}")
+
+        async def fetch_sector(code: str):
+            try:
+                quote = await kis_client.get_stock_quote(code, market=market_code)
+                # KIS API 업종명 (오버라이드 맵에 없는 종목만 여기 도달)
+                sector = quote.get("sector") or "기타"
+                await set_cache(
+                    f"{SECTOR_MAP_CACHE_PREFIX}{code}",
+                    sector,
+                    ttl=SECTOR_MAP_CACHE_TTL
+                )
+                return code, sector
+            except Exception as e:
+                print(f"[WARN] Sector fetch failed for {code}: {e}")
+                return code, "기타"
+
+        fetched = await asyncio.gather(*[fetch_sector(c) for c in miss_codes])
+        result.update(dict(fetched))
+    else:
+        print(f"[DEBUG] All sector mappings resolved (override or cache)")
+
     return result
 
 
-from app.core.utils import is_market_open, get_last_market_date
+def classify_by_sector(rankings: List[Dict], sector_map: Dict[str, str]) -> Dict[str, List[Dict]]:
+    """
+    업종별 분류 및 거래대금 순 정렬
+    - sector_map: { 종목코드: 업종명 } (KIS API에서 조회한 실시간 데이터)
+    - 매핑 없는 종목은 '기타' 섹터로 분류, 맨 마지막에 표시
+    """
+    sector_stocks: Dict[str, List[Dict]] = {}
 
-# ... (기존 코드 유지) ...
+    for stock_data in rankings:
+        sector = sector_map.get(stock_data["code"], "기타")
+        if sector not in sector_stocks:
+            sector_stocks[sector] = []
+        sector_stocks[sector].append(stock_data)
+
+    # '기타' 섹터는 별도 보관 후 맨 마지막에 추가
+    other_stocks = sector_stocks.pop("기타", [])
+
+    # 각 섹터의 총 거래대금 계산 → 거래대금 순 정렬
+    sector_totals = {
+        name: sum(s["trading_value"] for s in stocks)
+        for name, stocks in sector_stocks.items()
+    }
+    sorted_sectors = sorted(sector_totals.items(), key=lambda x: x[1], reverse=True)
+
+    print("[DEBUG] Sector totals (sorted):")
+    for name, total in sorted_sectors:
+        print(f"  {name}: {total:,}")
+
+    result = OrderedDict()
+    for sector_name, _ in sorted_sectors:
+        sorted_stocks = sorted(sector_stocks[sector_name], key=lambda x: x["trading_value"], reverse=True)
+        result[sector_name] = [StockRanking(**s).model_dump() for s in sorted_stocks]
+
+    # '기타' 섹터는 맨 마지막에 추가
+    if other_stocks:
+        sorted_other = sorted(other_stocks, key=lambda x: x["trading_value"], reverse=True)
+        result["기타"] = [StockRanking(**s).model_dump() for s in sorted_other]
+
+    print(f"[DEBUG] Result key order: {list(result.keys())}")
+    return result
+
+
+# 기존 import는 위에서 처리됨
 
 @router.get("/volume-rank-by-theme")
-async def get_volume_rank_by_theme(db: AsyncSession = Depends(get_db)):
-    """테마별 거래량 상위 종목 조회 (영업일/휴일 대응)"""
-    cache_key = "volume_rank_by_theme"
+async def get_volume_rank_by_theme(
+    market: Optional[str] = Query(None, description="Market type: KRX, NXT, ALL(통합시세). Auto-detect if not specified."),
+    db: AsyncSession = Depends(get_db)
+):
+    """테마별 거래량 상위 종목 조회 (영업일/휴일 대응, KRX/NXT/ALL 지원)"""
+    
+    # 1. market 파라미터가 없으면 시간대별 자동 결정
+    if market is None:
+        market = get_current_market_type()  # "KRX" or "NXT"
+    
+    print(f"[DEBUG] Request received - market: {market}, current time: {datetime.now()}")
+    
+    # 2. 캐시 키에 market 포함
+    cache_key = f"volume_rank_by_theme:{market}"
     cached_data = await get_cache(cache_key)
     
     if cached_data:
+        print(f"[DEBUG] Returning cached data")
         return json.loads(cached_data)
     
     try:
@@ -121,37 +177,82 @@ async def get_volume_rank_by_theme(db: AsyncSession = Depends(get_db)):
         
         # 개장일 여부 확인 (주말 + 공휴일 체크)
         market_open = is_market_open()
+        print(f"[DEBUG] Market open status: {market_open}")
         
         if market_open:
             # 개장일: KIS API 조회
+            print(f"[DEBUG] Fetching from KIS API (market open)")
             kis_client = await get_kis_client()
-            rankings = await kis_client.get_volume_rank(limit=100)
             
-            # 15:30 이후면 DB에 저장
-            if is_after_market_close():
-                today = datetime.now().date()
-                await crud_daily_ranking.save_daily_rankings(db, today, rankings)
+            # market 파라미터에 따라 API 호출
+            # KRX="J", NXT="NX", ALL=KRX+NXT 별도 조회 후 병합 (UN 코드 미지원)
+            if market == "ALL":
+                krx_ranks = await kis_client.get_volume_rank(limit=30, market="J")
+                nxt_ranks = await kis_client.get_volume_rank(limit=30, market="NX")
+                seen: set = set()
+                merged = []
+                for r in sorted(krx_ranks + nxt_ranks, key=lambda x: x["trading_value"], reverse=True):
+                    if r["code"] not in seen:
+                        seen.add(r["code"])
+                        merged.append(r)
+                rankings = merged[:30]
+            else:
+                api_market_code = {"NXT": "NX"}.get(market, "J")
+                rankings = await kis_client.get_volume_rank(limit=30, market=api_market_code)
+            print(f"[DEBUG] KIS API returned {len(rankings)} rankings")
+            
+            # 15:30 이후면 KRX DB에 저장, 20:00 이후면 NXT DB에 저장
+            now = datetime.now()
+            if market == "KRX" and (now.hour > 15 or (now.hour == 15 and now.minute >= 30)):
+                today = now.date()
+                await crud_daily_ranking.save_daily_rankings(db, today, rankings, market_type="KRX")
+            elif market == "NXT" and now.hour >= 20:
+                today = now.date()
+                await crud_daily_ranking.save_daily_rankings(db, today, rankings, market_type="NXT")
         else:
             # 휴장일: 가장 최근 개장일 DB 조회
+            # DB에서는 종목코드, 종목명, 랭크, market_type만 사용
+            # 가격/등락률/거래량 등은 실시간 조회로 업데이트
             last_market_date = get_last_market_date()
-            rankings = await crud_daily_ranking.get_rankings_by_date(db, last_market_date)
+            print(f"[DEBUG] Market closed. Fetching from DB for date: {last_market_date}")
+
+            if market == "ALL":
+                # 통합시세: KRX + NXT DB 데이터 병합 후 거래대금 상위 30개
+                krx = await crud_daily_ranking.get_rankings_by_date(db, last_market_date, market_type="KRX")
+                nxt = await crud_daily_ranking.get_rankings_by_date(db, last_market_date, market_type="NXT")
+                seen = set()
+                merged = []
+                for r in sorted((krx or []) + (nxt or []), key=lambda x: x.get("trading_value", 0), reverse=True):
+                    if r["code"] not in seen:
+                        seen.add(r["code"])
+                        merged.append(r)
+                rankings = merged[:30]
+            else:
+                rankings = await crud_daily_ranking.get_rankings_by_date(db, last_market_date, market_type=market)
+            print(f"[DEBUG] DB returned {len(rankings) if rankings else 0} rankings")
             
             if not rankings:
+                print(f"[WARN] No rankings found in DB for date {last_market_date}, market {market}")
                 rankings = []
             
             # 실시간 시세 업데이트 (병렬 처리)
+            # 평일이므로 실시간 시세 업데이트 진행
             if rankings:
                 try:
+                    print(f"[DEBUG] Starting real-time quote updates for {len(rankings)} stocks")
                     kis_client = await get_kis_client()
                     
-                    # 1. 토큰 미리 확보 (Concurrency Issue 방지)
+                    # 토큰 미리 확보 (Concurrency Issue 방지)
                     await kis_client.get_access_token()
+                    print(f"[DEBUG] KIS token acquired")
                     
-                    # 2. 업데이트 함수 정의
+                    # market 파라미터 설정 (KRX/NXT 구분)
+                    api_market_code = "NX" if market == "NXT" else "J"
+                    
+                    # 업데이트 함수 정의
                     async def update_quote(ranking):
                         try:
-                            # DB의 종목 코드로 실시간 시세 조회
-                            quote = await kis_client.get_stock_quote(ranking['code'])
+                            quote = await kis_client.get_stock_quote(ranking['code'], market=api_market_code)
                             
                             # 순위는 유지하되, 가격/거래량 정보는 실시간 데이터로 덮어쓰기
                             ranking['current_price'] = quote['current_price']
@@ -159,27 +260,32 @@ async def get_volume_rank_by_theme(db: AsyncSession = Depends(get_db)):
                             ranking['change_rate'] = quote['change_rate']
                             ranking['volume'] = quote['volume']
                             ranking['trading_value'] = quote.get('trading_value', 0)
+                            ranking['trading_value_change_rate'] = quote.get('trading_value_change_rate')
                             
                         except Exception as e:
-                            # 개별 종목 조회 실패 시 로그만 남기고 기존 DB 데이터 유지
-                            print(f"[Warn] 실시간 시세 조회 실패 ({ranking.get('name', '')}): {str(e)}")
+                            print(f"[WARN] Quote update failed for {ranking.get('name', '')}: {str(e)}")
 
-                    # 3. 청크 단위 병렬 실행 (Rate Limit 고려)
-                    # 실전투자: 초당 20건 제한 / 모의투자: 초당 2건 제한
-                    # 성능 개선을 위해 20개씩 병렬 호출하되, 텀을 아주 짧게 둡니다.
+                    # 청크 단위 병렬 실행 (Rate Limit 고려)
                     CHUNK_SIZE = 20
                     for i in range(0, len(rankings), CHUNK_SIZE):
                         chunk = rankings[i:i + CHUNK_SIZE]
                         await asyncio.gather(*[update_quote(r) for r in chunk])
-                        # API 과부하 방지를 위한 짧은 대기 (0.05초)
                         await asyncio.sleep(0.05)
-                        
+                    
+                    print(f"[DEBUG] Real-time quote updates completed")
+                    
                 except Exception as e:
-                    print(f"[Error] 실시간 시세 업데이트 프로세스 실패: {str(e)}")
-                    # 전체 프로세스 실패 시에도 DB에 있는 기존 데이터는 반환
+                    print(f"[ERROR] Real-time quote update process failed: {str(e)}")
+                    import traceback
+                    traceback.print_exc()
         
-        # 테마별 분류 및 정렬
-        result = classify_and_sort_by_theme(rankings)
+        # 업종별 동적 분류 및 정렬 (KIS API 실시간 업종명 + Redis 24h 캐시)
+        print(f"[DEBUG] Classifying {len(rankings)} stocks by sector")
+        kis_client = await get_kis_client()
+        api_market_code = "NX" if market == "NXT" else "J"
+        sector_map = await get_sector_map_from_cache_or_api(rankings, kis_client, api_market_code)
+        result = classify_by_sector(rankings, sector_map)
+        print(f"[DEBUG] Classification complete - {len(result)} sectors")
         
         # 캐시 저장 (5초 - 실시간성 우선)
         await set_cache(cache_key, json.dumps(result, ensure_ascii=False), ttl=5)
@@ -187,7 +293,11 @@ async def get_volume_rank_by_theme(db: AsyncSession = Depends(get_db)):
         return result
     
     except Exception as e:
+        error_msg = f"거래량 순위 조회 실패: {type(e).__name__}: {str(e)}"
+        print(f"[ERROR] {error_msg}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"거래량 순위 조회 실패: {str(e)}"
+            detail=error_msg
         )

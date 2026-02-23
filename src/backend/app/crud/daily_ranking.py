@@ -12,7 +12,8 @@ from app.models.daily_ranking import DailyRanking
 async def save_daily_rankings(
     db: AsyncSession,
     trade_date: date,
-    rankings: List[Dict]
+    rankings: List[Dict],
+    market_type: str = "KRX"
 ) -> None:
     """일일 거래량 순위 저장 (기존 데이터 삭제 후 새로 저장)
     
@@ -20,10 +21,14 @@ async def save_daily_rankings(
         db: 데이터베이스 세션
         trade_date: 거래일
         rankings: 순위 데이터 리스트
+        market_type: 시장 구분 ("KRX" 또는 "NXT")
     """
-    # 기존 데이터 삭제 (동일 날짜)
+    # 기존 데이터 삭제 (동일 날짜 + 동일 시장)
     await db.execute(
-        delete(DailyRanking).where(DailyRanking.trade_date == trade_date)
+        delete(DailyRanking).where(
+            DailyRanking.trade_date == trade_date,
+            DailyRanking.market_type == market_type
+        )
     )
     
     # 새 데이터 삽입
@@ -32,6 +37,7 @@ async def save_daily_rankings(
             trade_date=trade_date,
             stock_code=ranking["code"],
             stock_name=ranking["name"],
+            market_type=market_type,
             rank=ranking["rank"],
             current_price=ranking["current_price"],
             change_price=ranking["change_price"],
@@ -46,20 +52,25 @@ async def save_daily_rankings(
 
 async def get_rankings_by_date(
     db: AsyncSession,
-    trade_date: date
+    trade_date: date,
+    market_type: str = "KRX"
 ) -> List[Dict]:
     """특정 날짜의 거래량 순위 조회
     
     Args:
         db: 데이터베이스 세션
         trade_date: 거래일
+        market_type: 시장 구분 ("KRX" 또는 "NXT")
     
     Returns:
         List[Dict]: 순위 데이터 리스트
     """
     result = await db.execute(
         select(DailyRanking)
-        .where(DailyRanking.trade_date == trade_date)
+        .where(
+            DailyRanking.trade_date == trade_date,
+            DailyRanking.market_type == market_type
+        )
         .order_by(DailyRanking.rank)
     )
     rankings = result.scalars().all()

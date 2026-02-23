@@ -37,14 +37,33 @@ def get_last_market_date() -> date:
     가장 최근 개장일 조회
     (오늘이 개장일이면 오늘 리턴, 휴장이면 직전 평일 리턴)
     """
+    from datetime import timedelta
+    
     current_date = datetime.now().date()
     # 최근 10일 전까지 검색 (설날/추석 연휴 고려)
     for _ in range(10):
         if is_market_open(current_date):
             return current_date
-        current_date = current_date.replace(day=current_date.day - 1) # timedelta 권장
-        # timedelta 사용
-        from datetime import timedelta
         current_date -= timedelta(days=1)
         
-    return current_date # Fallback
+    return current_date  # Fallback
+
+
+def get_current_market_type() -> str:
+    """현재 시간대에 맞는 시장 타입 반환
+    
+    Returns:
+        "KRX" (20:00 이전) or "NXT" (20:00 이후)
+        단, 휴장일인 경우 기본적으로 "NXT" 반환
+    """
+    # 휴장일이면 NXT 우선 반환
+    if not is_market_open():
+        return "NXT"
+
+    now = datetime.now()
+    
+    # 20:00 이후면 NXT
+    if now.hour >= 20:
+        return "NXT"
+    
+    return "KRX"

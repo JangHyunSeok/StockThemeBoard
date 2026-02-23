@@ -33,7 +33,7 @@ export default function HomePage() {
         );
     }
 
-    // 테마 목록 추출
+    // 테마 목록 추출 - 백엔드에서 정렬된 순서 그대로 사용 (기타는 맨 마지막)
     const themeNames = Object.keys(volumeRankings);
 
     if (themeNames.length === 0) {

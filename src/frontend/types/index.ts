@@ -44,4 +44,5 @@ export interface StockRanking {
     change_rate: number;
     volume: number;
     trading_value: number;
+    trading_value_change_rate?: number; // 전일대비 증가율 (Volume Increase Rate as proxy)
 }

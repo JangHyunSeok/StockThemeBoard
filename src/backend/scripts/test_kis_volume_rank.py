@@ -3,7 +3,9 @@ KIS API 거래량 순위 테스트 스크립트
 """
 import asyncio
 import sys
-sys.path.insert(0, '/app')
+import os
+# Add backend directory to sys.path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from app.services.kis_client import get_kis_client
 
@@ -25,13 +27,45 @@ async def test_volume_rank():
         print("조회 결과:")
         print("=" * 50)
         
-        for stock in rankings[:5]:  # 상위 5개만 출력
-            print(f"{stock['rank']}위: {stock['name']} ({stock['code']})")
-            print(f"  현재가: {stock['current_price']:,}원")
-            print(f"  등락률: {stock['change_rate']:+.2f}%")
-            print(f"  거래량: {stock['volume']:,}")
-            print(f"  거래대금: {stock['trading_value']:,}원")
-            print()
+        for stock in rankings[:1]:  # 상위 1개만 출력 (필드 확인용)
+             print(f"Update: Raw data inspection")
+             # We need to access the raw data which is not returned by get_volume_rank currently as it filters fields.
+             # So I will modify get_volume_rank temporarily or just use the client directly here?
+             # Actually get_volume_rank returns a filtered dict. 
+             # I should modify the script to call client.client.get directly or modify get_volume_rank to return raw data?
+             # Better: I will use the client's internal method if possible, or just look at what get_volume_rank returns.
+             # Wait, get_volume_rank returns a list of dictionaries with specific keys.
+             # I need to see the RAW response from KIS API. 
+             pass
+
+        # To see raw response, I'll direct call the API endpoint in this script using the client's token and http client.
+        access_token = await client.get_access_token()
+        url = "/uapi/domestic-stock/v1/quotations/volume-rank"
+        headers = {
+            "authorization": f"Bearer {access_token}",
+            "appkey": client.app_key,
+            "appsecret": client.app_secret,
+            "tr_id": "FHPST01710000"
+        }
+        params = {
+            "fid_cond_mrkt_div_code": "J",
+            "fid_cond_scr_div_code": "20171",
+            "fid_input_iscd": "0000",
+            "fid_div_cls_code": "0",
+            "fid_input_cnt_1": "1", # Only 1 for inspection
+            "fid_rank_sort_cls_code": "0"
+        }
+        response = await client.client.get(url, headers=headers, params=params)
+        print("\n🔍 Raw Response Item (First Item):")
+        if response.status_code == 200:
+            data = response.json()
+            if "output" in data and len(data["output"]) > 0:
+                import json
+                print(json.dumps(data["output"][0], indent=2, ensure_ascii=False))
+            else:
+                print("No output found")
+        else:
+             print(f"Error: {response.text}")
         
         return True
         

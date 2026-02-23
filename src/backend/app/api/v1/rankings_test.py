@@ -1,10 +1,12 @@
 """
 테스트용 간단한 API - 실제 KIS API 없이도 동작
 """
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 from typing import Dict, List
 from collections import OrderedDict
 import random
+
+from app.services.kis_client import get_kis_client
 
 router = APIRouter()
 
@@ -77,3 +79,25 @@ async def get_volume_rank_by_theme_test():
         result[theme_name] = theme_stocks[theme_name]
     
     return result
+
+
+@router.get("/volume-rank-by-theme_test")
+async def get_volume_rank_raw(
+    market: str = Query("KRX", description="Market type: KRX or NXT")
+):
+    """
+    KIS API 원본 데이터 확인용 (테마 분류 없이 30개 원본 그대로 반환)
+
+    - 테마 분류 없이 KIS API에서 받아온 30개 종목을 그대로 반환
+    - 디버깅용: 실제로 어떤 종목이 상위에 있는지 확인할 때 사용
+    """
+    api_market_code = "NX" if market == "NXT" else "J"
+
+    kis_client = await get_kis_client()
+    rankings = await kis_client.get_volume_rank(limit=30, market=api_market_code)
+
+    return {
+        "market": market,
+        "total_count": len(rankings),
+        "rankings": rankings
+    }

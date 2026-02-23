@@ -13,6 +13,7 @@ class StockRanking(BaseModel):
     change_rate: float = Field(..., description="등락률 (%)")
     volume: int = Field(..., description="거래량")
     trading_value: int = Field(..., description="거래대금")
+    trading_value_change_rate: Optional[float] = Field(None, description="거래대금 전일대비 증감률 (%)")  # Added field
     
     class Config:
         from_attributes = True

@@ -48,34 +48,48 @@ async def seed_daily_rankings():
         today = datetime.now().date()
         print(f"📅 데이터 생성 날짜: {today}\n")
         
-        print("💾 Daily Rankings 데이터 생성 중...")
+        print("💾 Daily Rankings 데이터 생성 중...\n")
         
-        for idx, stock in enumerate(stocks, start=1):
-            # 더미 데이터 생성 (실제 시세 데이터처럼 보이도록)
-            base_price = random.randint(10000, 100000)
-            change_rate = random.uniform(-5.0, 5.0)
-            change_price = int(base_price * change_rate / 100)
-            current_price = base_price + change_price
-            volume = random.randint(1000000, 50000000)
-            trading_value = current_price * volume
+        # KRX와 NXT 두 가지 시장 데이터 모두 생성
+        for market_type in ["KRX", "NXT"]:
+            print(f"=== {market_type} 시장 데이터 생성 ===")
             
-            daily_ranking = DailyRanking(
-                trade_date=today,
-                stock_code=stock.code,
-                stock_name=stock.name,
-                rank=idx,
-                current_price=current_price,
-                change_price=change_price,
-                change_rate=round(change_rate, 2),
-                volume=volume,
-                trading_value=trading_value,
-            )
-            session.add(daily_ranking)
+            for idx, stock in enumerate(stocks, start=1):
+                # 더미 데이터 생성 (실제 시세 데이터처럼 보이도록)
+                base_price = random.randint(10000, 100000)
+                change_rate = random.uniform(-5.0, 5.0)
+                change_price = int(base_price * change_rate / 100)
+                current_price = base_price + change_price
+                volume = random.randint(1000000, 50000000)
+                trading_value = current_price * volume
+                
+                # NXT는 정규장보다 약간 다른 가격으로 설정
+                if market_type == "NXT":
+                    price_diff = random.randint(-1000, 1000)
+                    current_price += price_diff
+                    change_price += price_diff
+                
+                daily_ranking = DailyRanking(
+                    trade_date=today,
+                    stock_code=stock.code,
+                    stock_name=stock.name,
+                    rank=idx,
+                    current_price=current_price,
+                    change_price=change_price,
+                    change_rate=round(change_rate, 2),
+                    volume=volume,
+                    trading_value=trading_value,
+                    market_type=market_type,  # KRX or NXT
+                )
+                session.add(daily_ranking)
+                
+                if idx <= 5:  # 처음 5개만 출력
+                    print(f"  ✅ [{idx:2d}] {stock.name:15s} | "
+                          f"현재가: {current_price:>8,}원 | "
+                          f"등락률: {change_rate:>6.2f}% | "
+                          f"거래대금: {trading_value//100000000:>6,}억")
             
-            print(f"  ✅ [{idx:2d}] {stock.name:15s} | "
-                  f"현재가: {current_price:>8,}원 | "
-                  f"등락률: {change_rate:>6.2f}% | "
-                  f"거래대금: {trading_value//100000000:>6,}억")
+            print(f"  ✅ {market_type}: {len(stocks)}개 종목 생성 완료\n")
         
         await session.commit()
         
@@ -84,9 +98,11 @@ async def seed_daily_rankings():
         print("=" * 80)
         print(f"\n📊 생성된 데이터:")
         print(f"  - 날짜: {today}")
-        print(f"  - 종목 수: {len(stocks)}개")
+        print(f"  - KRX 종목 수: {len(stocks)}개")
+        print(f"  - NXT 종목 수: {len(stocks)}개")
         print(f"\n✨ 이제 API를 통해 거래량 순위를 조회할 수 있습니다!")
-        print(f"   👉 http://localhost:8000/api/v1/rankings/volume-rank-by-theme\n")
+        print(f"   👉 http://localhost:8000/api/v1/rankings/volume-rank-by-theme?market=KRX")
+        print(f"   👉 http://localhost:8000/api/v1/rankings/volume-rank-by-theme?market=NXT\n")
 
 
 async def main():

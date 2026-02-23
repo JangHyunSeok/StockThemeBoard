@@ -30,10 +30,12 @@ export function useStockQuote(code: string) {
 }
 
 // 테마별 거래량 순위 조회 (평일: 10초마다 / 주말: 갱신 안 함)
-export function useVolumeRankByTheme() {
+export function useVolumeRankByTheme(market?: 'KRX' | 'NXT' | 'ALL') {
+    const defaultMarket = market || 'ALL';
+
     return useQuery({
-        queryKey: ['volume-rank-by-theme'],
-        queryFn: api.getVolumeRankByTheme,
-        refetchInterval: isMarketClosed() ? false : 10000, // 휴장일에는 자동 갱신 비활성화
+        queryKey: ['volume-rank-by-theme', defaultMarket],
+        queryFn: () => api.getVolumeRankByTheme(defaultMarket),
+        refetchInterval: isMarketClosed() ? false : 10000,
     });
 }
