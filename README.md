@@ -300,6 +300,8 @@ MIT License
 
 **Last Updated**: 2026-02-23
 **Version**: 1.2.0 (섹터 오버라이드 & 멀티 마켓 지원)
+
 **Demo page**: http://stock.hayoone.com
 
 ```
+
