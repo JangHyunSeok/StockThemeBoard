@@ -189,13 +189,29 @@ async def get_volume_rank_by_theme(
             if market == "ALL":
                 krx_ranks = await kis_client.get_volume_rank(limit=30, market="J")
                 nxt_ranks = await kis_client.get_volume_rank(limit=30, market="NX")
-                seen: set = set()
-                merged = []
-                for r in sorted(krx_ranks + nxt_ranks, key=lambda x: x["trading_value"], reverse=True):
-                    if r["code"] not in seen:
-                        seen.add(r["code"])
-                        merged.append(r)
-                rankings = merged[:30]
+                
+                # 병합 맵 생성
+                merged_map = {}
+                
+                # 1. KRX 데이터 먼저 투입
+                for r in krx_ranks:
+                    merged_map[r["code"]] = r.copy()
+                    
+                # 2. NXT 데이터 병합 (합산 및 덮어쓰기)
+                for r in nxt_ranks:
+                    code = r["code"]
+                    if code in merged_map:
+                        # 동일 종목 존재: 거래대금 합산 및 NXT 시세 우선
+                        merged_map[code]["trading_value"] += r["trading_value"]
+                        merged_map[code]["current_price"] = r["current_price"]
+                        merged_map[code]["change_price"] = r["change_price"]
+                        merged_map[code]["change_rate"] = r["change_rate"]
+                        merged_map[code]["volume"] += r["volume"]  # 거래량도 합산
+                    else:
+                        merged_map[code] = r.copy()
+                
+                # 3. 거래대금 순 정렬 후 상위 30개
+                rankings = sorted(merged_map.values(), key=lambda x: x["trading_value"], reverse=True)[:30]
             else:
                 api_market_code = {"NXT": "NX"}.get(market, "J")
                 rankings = await kis_client.get_volume_rank(limit=30, market=api_market_code)
@@ -247,11 +263,13 @@ async def get_volume_rank_by_theme(
                     print(f"[DEBUG] KIS token acquired")
                     
                     # market 파라미터 설정 (KRX/NXT 구분)
-                    api_market_code = "NX" if market == "NXT" else "J"
+                    # ALL인 경우 NXT 실시간 시세를 우선적으로 시도
+                    api_market_code = "NX" if market in ("NXT", "ALL") else "J"
                     
                     # 업데이트 함수 정의
                     async def update_quote(ranking):
                         try:
+                            # 1차 시도 (NXT if ALL/NXT, else KRX)
                             quote = await kis_client.get_stock_quote(ranking['code'], market=api_market_code)
                             
                             # 순위는 유지하되, 가격/거래량 정보는 실시간 데이터로 덮어쓰기
@@ -263,7 +281,21 @@ async def get_volume_rank_by_theme(
                             ranking['trading_value_change_rate'] = quote.get('trading_value_change_rate')
                             
                         except Exception as e:
-                            print(f"[WARN] Quote update failed for {ranking.get('name', '')}: {str(e)}")
+                            # 2차 시도: ALL 모드에서 NXT 실패 시 KRX fallback
+                            if market == "ALL" and api_market_code == "NX":
+                                try:
+                                    print(f"[DEBUG] NXT fallback to KRX for {ranking.get('name', '')}")
+                                    quote = await kis_client.get_stock_quote(ranking['code'], market="J")
+                                    ranking['current_price'] = quote['current_price']
+                                    ranking['change_price'] = quote['change_price']
+                                    ranking['change_rate'] = quote['change_rate']
+                                    ranking['volume'] = quote['volume']
+                                    ranking['trading_value'] = quote.get('trading_value', 0)
+                                    ranking['trading_value_change_rate'] = quote.get('trading_value_change_rate')
+                                except Exception as e2:
+                                    print(f"[WARN] Quote update failed for {ranking.get('name', '')} (NXT & KRX): {str(e2)}")
+                            else:
+                                print(f"[WARN] Quote update failed for {ranking.get('name', '')}: {str(e)}")
 
                     # 청크 단위 병렬 실행 (Rate Limit 고려)
                     CHUNK_SIZE = 20

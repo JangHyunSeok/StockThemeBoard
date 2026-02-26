@@ -9,6 +9,7 @@ services:
       POSTGRES_USER: stockuser
       POSTGRES_PASSWORD: stockpass
       POSTGRES_DB: stocktheme
+      TZ: Asia/Seoul
     ports:
       - "5432:5432"
     volumes:
@@ -27,6 +28,8 @@ services:
     container_name: stocktheme-redis
     ports:
       - "6379:6379"
+    environment:
+      - TZ=Asia/Seoul
     volumes:
       - redis-data:/data
     networks:
@@ -49,6 +52,7 @@ services:
       - DATABASE_URL=postgresql+asyncpg://stockuser:stockpass@postgres:5432/stocktheme
       - REDIS_URL=redis://redis:6379/0
       - ENVIRONMENT=development
+      - TZ=Asia/Seoul
     ports:
       - "8000:8000"
     volumes:
@@ -71,6 +75,7 @@ services:
     environment:
       - NEXT_PUBLIC_API_URL=https://stock.hayoone.com/api
       - NEXT_PUBLIC_WS_URL=wss://stock.hayoone.com/ws
+      - TZ=Asia/Seoul
     # 포트를 외부에 직접 노출하지 않음 - Nginx를 통해서만 접근
     expose:
       - "3000"
@@ -92,6 +97,8 @@ services:
     ports:
       - "80:80"
       - "443:443"
+    environment:
+      - TZ=Asia/Seoul
     volumes:
       - ./nginx/conf.d:/etc/nginx/conf.d
       - ./certbot/conf:/etc/letsencrypt
