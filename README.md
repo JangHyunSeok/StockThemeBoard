@@ -168,7 +168,7 @@ python scripts/seed_data.py
 ```
 
 ### 5. 접속
-- **Frontend**: http://localhost:3000
+- **Frontend**: http://localhost
 - **Backend API**: http://localhost:8000
 - **Swagger UI**: http://localhost:8000/docs
 - **PostgreSQL**: localhost:5432
@@ -196,7 +196,7 @@ python scripts/seed_data.py
 
 #### 거래량 순위 API
 - `GET /api/v1/rankings/volume-rank-by-theme` - 테마별 거래대금 상위 종목 (실시간)
-  - `market` 파라미터 지원: `KRX`(코스피/코스닥), `NXT`(나스닥/뉴욕), `ALL`(통합)
+  - `market` 파라미터 지원: `KRX`, `NXT`, `통합`
 
 자세한 API 명세는 http://localhost:8000/docs 에서 확인 가능합니다.
 
@@ -206,7 +206,7 @@ python scripts/seed_data.py
 - 6개 테마별로 거래대금 상위 4개 종목 표시
 - 2x2 그리드: 종목명/등락률, 현재가/거래대금
 - 모바일: 2열, 데스크톱: 3열 그리드
-- 60초마다 자동 갱신
+- 3초마다 자동 갱신
 
 ### 테마 상세 화면
 - 해당 테마의 거래대금 상위 15개 종목
@@ -278,11 +278,11 @@ open http://localhost
 ### KIS API 관련 이슈 해결
 - **주말/공휴일 대응**: `holidays` 라이브러리와 Hybrid 로직(DB+실시간)을 사용하여 365일 중단 없는 서비스 제공.
 - **장 시간**: 평일 15:40 스케줄러 자동 저장으로 데이터 누락 방지.
-- **API 속도**: Redis 캐싱(5초) 및 병렬 처리로 응답 속도 최적화.
+- **API 속도**: Redis 캐싱(3초) 및 병렬 처리로 응답 속도 최적화.
 
 ### 해결 방법
-- 평일 장중: 실시간 API + 60초 캐시
-- 휴일/장마감: DB 저장 데이터 + 실시간 시세(5초 캐시)
+- 평일 장중: 실시간 API + 3초 캐시
+- 휴일/장마감: DB 저장 데이터 + 실시간 시세(3초 캐시)
 
 ## 🤝 기여
 
@@ -298,13 +298,10 @@ MIT License
 
 ---
 
-**Last Updated**: 2026-02-23
+**Last Updated**: 2026-02-26
 
-**Version**: 1.2.0 (섹터 오버라이드 & 멀티 마켓 지원)
+**Version**: 1.3.0 (캐싱 시간 변경)
 
 **Demo page**: https://stock.hayoone.com
 
 ```
-
-
-
