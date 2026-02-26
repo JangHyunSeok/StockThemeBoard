@@ -69,10 +69,11 @@ services:
       dockerfile: Dockerfile
     container_name: stocktheme-frontend
     environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8000
-      - NEXT_PUBLIC_WS_URL=ws://localhost:8000/ws
-    ports:
-      - "3000:3000"
+      - NEXT_PUBLIC_API_URL=https://stock.hayoone.com/api
+      - NEXT_PUBLIC_WS_URL=wss://stock.hayoone.com/ws
+    # 포트를 외부에 직접 노출하지 않음 - Nginx를 통해서만 접근
+    expose:
+      - "3000"
     volumes:
       - ./src/frontend:/app
       - /app/node_modules
@@ -82,6 +83,34 @@ services:
     depends_on:
       - backend
     command: sh -c "npm install && npm run dev"
+
+  # Nginx 리버스 프록시
+  nginx:
+    image: nginx:alpine
+    container_name: stocktheme-nginx
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d
+      - ./certbot/conf:/etc/letsencrypt
+      - ./certbot/www:/var/www/certbot
+    networks:
+      - stocktheme-network
+    depends_on:
+      - frontend
+      - backend
+
+  # Certbot (Let's Encrypt 인증서 발급/자동 갱신)
+  certbot:
+    image: certbot/certbot
+    container_name: stocktheme-certbot
+    volumes:
+      - ./certbot/conf:/etc/letsencrypt
+      - ./certbot/www:/var/www/certbot
+    # 12시간마다 갱신 시도 (인증서 만료 30일 전부터 갱신 가능)
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
 
   # Docker Monitoring (Portainer)
   portainer:
@@ -104,3 +133,5 @@ volumes:
   postgres-data:
   redis-data:
   portainer_data:
+  certbot-conf:
+  certbot-www:

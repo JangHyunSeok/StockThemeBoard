@@ -71,3 +71,13 @@ coverage/
 
 # Alembic
 alembic/versions/*.pyc
+
+# SSL / Let's Encrypt (인증서 및 개인키는 절대 git에 올리면 안 됨)
+certbot/conf/
+certbot/www/
+
+# Nginx 백업
+nginx/conf.d/*.backup
+
+# 스크립트 백업
+scripts/*.backup
