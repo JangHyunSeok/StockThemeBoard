@@ -176,13 +176,23 @@ async def get_volume_rank_by_theme(
         rankings = []
         
         # 개장일 여부 확인 (주말 + 공휴일 체크)
-        # 20시 이후에는 모든 관점(KRX, NXT)에서 장이 종료된 것으로 간주하여 DB 조회 모드로 전환
         now = datetime.now()
-        market_open = is_market_open() and (9 <= now.hour < 20)
-        print(f"[DEBUG] Market open status (Time-aware): {market_open}")
+        is_krx_open = is_market_open() and (9 <= now.hour < 16)  # 한국거래소 운영 시간
+        is_nxt_open = now.hour >= 20 or now.hour < 9            # 대체거래소 운영 시간
+        
+        # 현재 조회하려는 마켓이 운영 중인지 확인
+        market_open = False
+        if market == "KRX" and is_krx_open:
+            market_open = True
+        elif market == "NXT" and is_nxt_open:
+            market_open = True
+        elif market == "ALL" and (is_krx_open or is_nxt_open):
+            market_open = True
+            
+        print(f"[DEBUG] Market open status (Time-aware): {market_open} (KRX:{is_krx_open}, NXT:{is_nxt_open})")
         
         if market_open:
-            # 개장일: KIS API 조회
+            # 운영 시간: 실시간 API 조회 (한국거래소 또는 대체거래소)
             print(f"[DEBUG] Fetching from KIS API (market open)")
             kis_client = await get_kis_client()
             

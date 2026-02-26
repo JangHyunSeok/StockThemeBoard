@@ -53,17 +53,16 @@ def get_current_market_type() -> str:
     """현재 시간대에 맞는 시장 타입 반환
     
     Returns:
-        "KRX" (20:00 이전) or "NXT" (20:00 이후)
-        단, 휴장일인 경우 기본적으로 "NXT" 반환
+        "KRX" (한국거래소: 09:00~20:00) or "NXT" (대체거래소: 20:00~09:00)
     """
-    # 휴장일이면 NXT 우선 반환
-    if not is_market_open():
-        return "NXT"
-
     now = datetime.now()
     
-    # 20:00 이후면 NXT
-    if now.hour >= 20:
+    # 20:00 ~ 09:00 사이는 대체거래소(NXT) 시간대
+    if now.hour >= 20 or now.hour < 9:
+        return "NXT"
+    
+    # 휴장일(주말/공휴일)인 경우 기본적으로 대체거래소 데이터 우선 표시
+    if not is_market_open():
         return "NXT"
     
     return "KRX"
