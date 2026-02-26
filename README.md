@@ -270,7 +270,7 @@ curl http://localhost:8000/api/v1/rankings/volume-rank-by-theme-test
 ### Frontend 테스트
 ```bash
 # 브라우저에서 접속
-open http://localhost:3000
+open http://localhost
 ```
 
 ## ⚠️ 알려진 이슈
