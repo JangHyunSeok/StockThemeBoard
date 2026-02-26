@@ -58,9 +58,13 @@ export default function HomePage() {
                 ))}
             </div>
 
-            {!isMarketClosed() && (
+            {isMarketClosed() ? (
                 <div className="mt-4 text-center text-xs text-gray-500">
-                    💡 거래대금 상위 종목이 자동으로 갱신됩니다 (10초)
+                    💡 장 종료 후에는 최종 데이터를 표시합니다
+                </div>
+            ) : (
+                <div className="mt-4 text-center text-xs text-gray-500">
+                    💡 거래대금 상위 종목이 자동으로 갱신됩니다 (3초)
                 </div>
             )}
         </div>

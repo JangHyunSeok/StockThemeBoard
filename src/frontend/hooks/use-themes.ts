@@ -36,6 +36,6 @@ export function useVolumeRankByTheme(market?: 'KRX' | 'NXT' | 'ALL') {
     return useQuery({
         queryKey: ['volume-rank-by-theme', defaultMarket],
         queryFn: () => api.getVolumeRankByTheme(defaultMarket),
-        refetchInterval: isMarketClosed() ? false : 10000,
+        refetchInterval: isMarketClosed() ? false : 3000,
     });
 }

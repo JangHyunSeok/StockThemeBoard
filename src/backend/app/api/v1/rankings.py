@@ -176,8 +176,10 @@ async def get_volume_rank_by_theme(
         rankings = []
         
         # 개장일 여부 확인 (주말 + 공휴일 체크)
-        market_open = is_market_open()
-        print(f"[DEBUG] Market open status: {market_open}")
+        # 20시 이후에는 모든 관점(KRX, NXT)에서 장이 종료된 것으로 간주하여 DB 조회 모드로 전환
+        now = datetime.now()
+        market_open = is_market_open() and (9 <= now.hour < 20)
+        print(f"[DEBUG] Market open status (Time-aware): {market_open}")
         
         if market_open:
             # 개장일: KIS API 조회
@@ -319,8 +321,10 @@ async def get_volume_rank_by_theme(
         result = classify_by_sector(rankings, sector_map)
         print(f"[DEBUG] Classification complete - {len(result)} sectors")
         
-        # 캐시 저장 (5초 - 실시간성 우선)
-        await set_cache(cache_key, json.dumps(result, ensure_ascii=False), ttl=5)
+        # 캐시 저장 (장중 3초, 장후 1시간)
+        is_after_hours = now.hour >= 20 or now.hour < 9
+        ttl = 3600 if is_after_hours else 3
+        await set_cache(cache_key, json.dumps(result, ensure_ascii=False), ttl=ttl)
         
         return result
     

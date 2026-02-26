@@ -1,6 +1,7 @@
 'use client';
 
 import { useVolumeRankByTheme } from '@/hooks/use-themes';
+import { isMarketClosed } from '@/lib/utils';
 import StockRow from '@/components/StockRow';
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
@@ -143,7 +144,9 @@ function ThemeContent() {
 
             {/* 자동 갱신 안내 */}
             <div className="mt-4 text-center text-sm text-gray-500">
-                💡 데이터는 10초마다 자동으로 갱신됩니다
+                {isMarketClosed()
+                    ? "💡 장 종료 후에는 최종 데이터를 표시합니다"
+                    : "💡 데이터는 3초마다 자동으로 갱신됩니다"}
             </div>
 
         </div>
