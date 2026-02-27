@@ -179,11 +179,8 @@ async def get_volume_rank_by_theme(
         now = datetime.now()
         
         # 1. 각 마켓별 '실시간 조회(Live Fetch)' 활성 시간 정의 (사용자 요구사항 반영)
-        # 한국거래소(KRX): 09:00 ~ 15:40
-        is_krx_active = is_market_open() and (
-            (now.hour > 9 or (now.hour == 9 and now.minute >= 0)) and 
-            (now.hour < 15 or (now.hour == 15 and now.minute <= 40))
-        )
+        # 한국거래소(KRX): 09:00 ~ 20:00 (장 종료 후에도 종가 데이터를 실시간 API로 조회)
+        is_krx_active = is_market_open() and (now.hour >= 9 and now.hour < 20)
         # 대체거래소(NXT) 및 통합(ALL): 08:00 ~ 20:00
         is_nxt_active = (now.hour >= 8 and now.hour < 20)
         is_all_active = (now.hour >= 8 and now.hour < 20)
@@ -208,11 +205,29 @@ async def get_volume_rank_by_theme(
             # KRX="J", NXT="NX", ALL=KRX+NXT 별도 조회 후 병합 (UN 코드 미지원)
             if market == "ALL":
                 # 통합시세: 08:00 ~ 20:00 사이면 항상 양쪽 마켓 실시간 데이터 가져와서 합산
-                # (한국거래소 개장 전/후라도 최종 시세 합산을 위해 호출)
                 krx_ranks = await kis_client.get_volume_rank(limit=30, market="J")
                 nxt_ranks = await kis_client.get_volume_rank(limit=30, market="NX")
                 
-                print(f"[DEBUG] ALL mode fetch (08:00-20:00) - KRX:{len(krx_ranks)}, NXT:{len(nxt_ranks)}")
+                print(f"[DEBUG] ALL mode fetch - KRX:{len(krx_ranks)}, NXT:{len(nxt_ranks)}")
+                
+                # NXT에는 있지만 KRX 순위(Top 30)에는 없는 종목들의 KRX 거래대금을 가져오기 위해
+                # 개별 시세 조회를 병렬로 실행 (KRX에 안 잡힌 종목의 거래대금이 0으로 나오는 문제 해결)
+                krx_codes = {r["code"] for r in krx_ranks}
+                missing_krx_codes = [r["code"] for r in nxt_ranks if r["code"] not in krx_codes]
+                
+                krx_extra_map = {}
+                if missing_krx_codes:
+                    print(f"[DEBUG] Fetching KRX quotes for {len(missing_krx_codes)} stocks missing from KRX rankings")
+                    extra_results = await asyncio.gather(*[
+                        kis_client.get_stock_quote(code, market="J")
+                        for code in missing_krx_codes
+                    ], return_exceptions=True)
+                    
+                    for code, res in zip(missing_krx_codes, extra_results):
+                        if isinstance(res, dict):
+                            krx_extra_map[code] = res
+                        else:
+                            print(f"[WARN] Failed to fetch extra KRX quote for {code}: {res}")
                 
                 # 병합 맵 생성
                 merged_map = {}
@@ -225,14 +240,21 @@ async def get_volume_rank_by_theme(
                 for r in nxt_ranks:
                     code = r["code"]
                     if code in merged_map:
-                        # 동일 종목 존재: 거래대금 합산 및 대체거래소 시세 우선
+                        # 동일 종목 존재: 양쪽 거래대금/거래량 합산 및 대체거래소 시세 우선
                         merged_map[code]["trading_value"] += r["trading_value"]
+                        merged_map[code]["volume"] += r["volume"]
                         merged_map[code]["current_price"] = r["current_price"]
                         merged_map[code]["change_price"] = r["change_price"]
                         merged_map[code]["change_rate"] = r["change_rate"]
-                        merged_map[code]["volume"] += r["volume"]
                     else:
-                        merged_map[code] = r.copy()
+                        # KRX 순위(Top 30)에는 없으나 NXT 순위에 있는 경우
+                        base_data = r.copy()
+                        # 아까 개별 조회로 가져온 KRX 거래데이터가 있으면 합산
+                        if code in krx_extra_map:
+                            extra = krx_extra_map[code]
+                            base_data["trading_value"] += extra["trading_value"]
+                            base_data["volume"] += extra["volume"]
+                        merged_map[code] = base_data
                 
                 # 3. 거래대금 순 정렬 후 상위 30개
                 rankings = sorted(merged_map.values(), key=lambda x: x["trading_value"], reverse=True)[:30]
