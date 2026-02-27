@@ -58,9 +58,9 @@ export default function HomePage() {
                 ))}
             </div>
 
-            {isMarketClosed() ? (
+            {isMarketClosed('ALL') ? (
                 <div className="mt-4 text-center text-xs text-gray-500">
-                    💡 장 종료 후에는 최종 데이터를 표시합니다
+                    💡 한국거래소 장 종료 후에는 대체거래소 및 최종 데이터를 표시합니다
                 </div>
             ) : (
                 <div className="mt-4 text-center text-xs text-gray-500">

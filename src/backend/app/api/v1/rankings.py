@@ -177,19 +177,27 @@ async def get_volume_rank_by_theme(
         
         # 개장일 여부 확인 (주말 + 공휴일 체크)
         now = datetime.now()
-        is_krx_open = is_market_open() and (9 <= now.hour < 16)  # 한국거래소 운영 시간
-        is_nxt_open = now.hour >= 20 or now.hour < 9            # 대체거래소 운영 시간
         
-        # 현재 조회하려는 마켓이 운영 중인지 확인
+        # 1. 각 마켓별 '실시간 조회(Live Fetch)' 활성 시간 정의 (사용자 요구사항 반영)
+        # 한국거래소(KRX): 09:00 ~ 15:40
+        is_krx_active = is_market_open() and (
+            (now.hour > 9 or (now.hour == 9 and now.minute >= 0)) and 
+            (now.hour < 15 or (now.hour == 15 and now.minute <= 40))
+        )
+        # 대체거래소(NXT) 및 통합(ALL): 08:00 ~ 20:00
+        is_nxt_active = (now.hour >= 8 and now.hour < 20)
+        is_all_active = (now.hour >= 8 and now.hour < 20)
+        
+        # 현재 요청된 마켓이 실시간 조회 대상인지 판단
         market_open = False
-        if market == "KRX" and is_krx_open:
+        if market == "KRX" and is_krx_active:
             market_open = True
-        elif market == "NXT" and is_nxt_open:
+        elif market == "NXT" and is_nxt_active:
             market_open = True
-        elif market == "ALL" and (is_krx_open or is_nxt_open):
+        elif market == "ALL" and is_all_active:
             market_open = True
             
-        print(f"[DEBUG] Market open status (Time-aware): {market_open} (KRX:{is_krx_open}, NXT:{is_nxt_open})")
+        print(f"[DEBUG] Market open status (Strict): {market_open} (KRX_Active:{is_krx_active}, NXT_Active:{is_nxt_active})")
         
         if market_open:
             # 운영 시간: 실시간 API 조회 (한국거래소 또는 대체거래소)
@@ -199,26 +207,30 @@ async def get_volume_rank_by_theme(
             # market 파라미터에 따라 API 호출
             # KRX="J", NXT="NX", ALL=KRX+NXT 별도 조회 후 병합 (UN 코드 미지원)
             if market == "ALL":
+                # 통합시세: 08:00 ~ 20:00 사이면 항상 양쪽 마켓 실시간 데이터 가져와서 합산
+                # (한국거래소 개장 전/후라도 최종 시세 합산을 위해 호출)
                 krx_ranks = await kis_client.get_volume_rank(limit=30, market="J")
                 nxt_ranks = await kis_client.get_volume_rank(limit=30, market="NX")
+                
+                print(f"[DEBUG] ALL mode fetch (08:00-20:00) - KRX:{len(krx_ranks)}, NXT:{len(nxt_ranks)}")
                 
                 # 병합 맵 생성
                 merged_map = {}
                 
-                # 1. KRX 데이터 먼저 투입
+                # 1. 한국거래소(KRX) 데이터 투입
                 for r in krx_ranks:
                     merged_map[r["code"]] = r.copy()
                     
-                # 2. NXT 데이터 병합 (합산 및 덮어쓰기)
+                # 2. 대체거래소(NXT) 데이터 병합 (합산 및 대체거래소 시세 우선)
                 for r in nxt_ranks:
                     code = r["code"]
                     if code in merged_map:
-                        # 동일 종목 존재: 거래대금 합산 및 NXT 시세 우선
+                        # 동일 종목 존재: 거래대금 합산 및 대체거래소 시세 우선
                         merged_map[code]["trading_value"] += r["trading_value"]
                         merged_map[code]["current_price"] = r["current_price"]
                         merged_map[code]["change_price"] = r["change_price"]
                         merged_map[code]["change_rate"] = r["change_rate"]
-                        merged_map[code]["volume"] += r["volume"]  # 거래량도 합산
+                        merged_map[code]["volume"] += r["volume"]
                     else:
                         merged_map[code] = r.copy()
                 
@@ -226,6 +238,8 @@ async def get_volume_rank_by_theme(
                 rankings = sorted(merged_map.values(), key=lambda x: x["trading_value"], reverse=True)[:30]
             else:
                 api_market_code = {"NXT": "NX"}.get(market, "J")
+                market_name = "대체거래소" if market == "NXT" else "한국거래소"
+                print(f"[DEBUG] Fetching from {market_name} API")
                 rankings = await kis_client.get_volume_rank(limit=30, market=api_market_code)
             print(f"[DEBUG] KIS API returned {len(rankings)} rankings")
             

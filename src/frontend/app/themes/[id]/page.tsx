@@ -144,8 +144,8 @@ function ThemeContent() {
 
             {/* 자동 갱신 안내 */}
             <div className="mt-4 text-center text-sm text-gray-500">
-                {isMarketClosed()
-                    ? "💡 장 종료 후에는 최종 데이터를 표시합니다"
+                {isMarketClosed(marketType)
+                    ? `💡 ${marketType === 'KRX' ? '한국거래소' : marketType === 'NXT' ? '대체거래소' : '거래소'} 장 종료 후에는 최종 데이터를 표시합니다`
                     : "💡 데이터는 3초마다 자동으로 갱신됩니다"}
             </div>
 
