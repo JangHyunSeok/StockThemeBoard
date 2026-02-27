@@ -2,19 +2,24 @@
 
 한국투자증권 OpenAPI를 활용한 **실시간 거래대금 상위 종목 모니터링 대시보드**
 
+> 🌐 **데모**: https://stock.hayoone.com
+
 ## 🎯 프로젝트 개요
 
 StockThemeBoard는 주식 테마별로 **실시간 거래대금 상위 종목**을 자동으로 수집하고 모니터링할 수 있는 웹 애플리케이션입니다. 한국투자증권 OpenAPI를 통해 실시간 시세와 거래량 데이터를 가져와 테마별로 분류하여 보여줍니다.
 
 ### ✨ 주요 기능
 
+- 📊 **코스피/코스닥 지수 표시** - 상단바에 지수 현재가·등락률 실시간 표시 (30초 갱신)
 - 🔥 **실시간 거래대금 상위 종목 조회** - KIS API를 통해 거래 활발한 종목 자동 수집
 - 🏷️ **테마별 자동 분류** - KIS 업종명 기반 분류 및 **섹터 오버라이드 맵**으로 정밀 보정
 - 📈 **실시간 시세 표시** - 현재가, 등락률, 거래대금 실시간 업데이트 (60초 자동 갱신)
-- 🌏 **멀티 마켓 지원** - 한국거래소(KRX), 대체거래소(NXT), 통합시세 지원
+- 🕯️ **캔들 차트** - 종목별 미니 캔들 차트 (고가/저가/시가/현재가 시각화)
+- 🌏 **멀티 마켓 지원** - KRX / NXT / ALL(통합) 마켓 토글
+- ⏰ **스마트 마켓 시간 처리** - KRX(09:00-15:40), NXT/ALL(08:00-20:00) 자동 구분
 - 📱 **모바일 최적화** - 2열 그리드 레이아웃으로 모바일 친화적
 - ⚡ **빠른 응답** - Redis 캐싱으로 API 응답 속도 향상
-- 🎨 **직관적인 UI** - 상승(빨강)/하락(파랑) 색상 구분, 2x2 그리드 레이아웃
+- 🎨 **직관적인 UI** - 상승(빨강)/하락(파랑) 색상 구분
 
 ## 🛠️ 기술 스택
 
@@ -37,12 +42,14 @@ StockThemeBoard는 주식 테마별로 **실시간 거래대금 상위 종목**�
 
 ### Infrastructure
 - **Docker & Docker Compose** - 컨테이너화
+- **Nginx** - 리버스 프록시 및 HTTPS 처리
+- **Let's Encrypt (Certbot)** - 자동 SSL 인증서 발급/갱신
+- **Portainer** - Docker 컨테이너 모니터링 UI (포트 9000)
 - **PostgreSQL Container** - 데이터베이스
 - **Redis Container** - 캐시 서버
-- **Multi-stage Build** - 효율적인 이미지 빌드
 
 ### External API
-- **한국투자증권 OpenAPI** - 실시간 주식 시세 및 거래량 순위 데이터
+- **한국투자증권 OpenAPI (KIS)** - 실시간 주식 시세, 거래량 순위, 업종 지수 데이터
 
 ## 📁 프로젝트 구조
 
@@ -64,16 +71,19 @@ StockThemeBoard/
 │   │   │   │   ├── themes.py        # 테마 API
 │   │   │   │   ├── stocks.py        # 종목 API (시세 조회)
 │   │   │   │   ├── rankings.py      # 거래량 순위 API
+│   │   │   │   ├── indices.py       # 코스피/코스닥 지수 API ← NEW
 │   │   │   │   └── rankings_test.py # 테스트용 더미 API
 │   │   │   ├── models/              # SQLAlchemy 모델
 │   │   │   │   ├── theme.py
 │   │   │   │   ├── stock.py
 │   │   │   │   └── theme_stock.py
 │   │   │   ├── schemas/             # Pydantic 스키마
+│   │   │   │   └── index.py         # 지수 스키마 ← NEW
 │   │   │   ├── services/            # 비즈니스 로직
 │   │   │   │   ├── kis_client.py   # KIS API 클라이언트
 │   │   │   │   └── redis_client.py # Redis 캐싱
-│   │   │   └── crud/                # CRUD 작업
+│   │   │   └── utils/
+│   │   │       └── business_day.py  # 영업일/마켓 시간 판별
 │   │   ├── alembic/                 # 데이터베이스 마이그레이션
 │   │   ├── scripts/                 # 유틸리티 스크립트
 │   │   │   └── seed_data.py        # 초기 데이터 생성
@@ -85,11 +95,12 @@ StockThemeBoard/
 │       │   ├── page.tsx             # 홈 (테마별 TOP 4 종목)
 │       │   ├── themes/[id]/
 │       │   │   └── page.tsx         # 테마 상세 (TOP 15 종목)
-│       │   ├── layout.tsx
+│       │   ├── layout.tsx           # 지수 헤더 포함 글로벌 레이아웃
 │       │   └── globals.css
 │       ├── components/
+│       │   ├── IndexHeader.tsx      # 코스피/코스닥 지수 상단바 ← NEW
 │       │   ├── ThemeSection.tsx     # 테마 섹션 컴포넌트
-│       │   └── StockRow.tsx         # 종목 행 컴포넌트
+│       │   └── StockRow.tsx         # 종목 행 (캔들 차트 포함)
 │       ├── hooks/
 │       │   └── use-themes.ts        # React Query 훅
 │       ├── lib/
@@ -97,10 +108,15 @@ StockThemeBoard/
 │       │   └── query-provider.tsx   # React Query 설정
 │       ├── types/
 │       │   └── index.ts             # TypeScript 타입
+│       ├── next.config.js           # API 프록시 rewrite 설정
 │       ├── package.json
 │       └── Dockerfile
 │
-├── docker-compose.yml               # Docker Compose 설정
+├── nginx/                           # Nginx 설정
+│   └── conf.d/
+│       └── default.conf
+├── certbot/                         # Let's Encrypt 인증서
+├── docker-compose.yml               # Docker Compose 설정 (Nginx/Certbot/Portainer 포함)
 ├── .env                             # 환경변수
 └── README.md
 ```
@@ -178,40 +194,42 @@ python scripts/seed_data.py
 
 ### Backend API 엔드포인트
 
-#### 테마 API
-- `GET /api/v1/themes` - 테마 목록 조회
-- `POST /api/v1/themes` - 테마 생성
-- `GET /api/v1/themes/{id}` - 테마 상세 조회 (종목 포함)
-- `PUT /api/v1/themes/{id}` - 테마 수정
-- `DELETE /api/v1/themes/{id}` - 테마 삭제
-- `POST /api/v1/themes/{id}/stocks` - 테마에 종목 추가
-
-#### 종목 API
-- `GET /api/v1/stocks` - 종목 목록 조회
-- `POST /api/v1/stocks` - 종목 생성
-- `GET /api/v1/stocks/{code}` - 종목 조회
-- `PUT /api/v1/stocks/{code}` - 종목 수정
-- `DELETE /api/v1/stocks/{code}` - 종목 삭제
-- `GET /api/v1/stocks/{code}/quote` - **실시간 시세 조회**
+#### 지수 API ← NEW
+- `GET /api/v1/indices/current` - **코스피/코스닥 현재 지수 조회**
+  - KIS API TR ID: `FHKUP03500100`
+  - 응답 예시: `{ items: [{ index_code: "0001", current_price: 2600.00, change_price: -12.5, change_rate: -0.48 }] }`
 
 #### 거래량 순위 API
 - `GET /api/v1/rankings/volume-rank-by-theme` - 테마별 거래대금 상위 종목 (실시간)
-  - `market` 파라미터 지원: `KRX`, `NXT`, `통합`
+  - `market` 파라미터: `KRX` (09:00-15:40), `NXT` (08:00-20:00), `ALL` (통합, 08:00-20:00)
 
-자세한 API 명세는 http://localhost:8000/docs 에서 확인 가능합니다.
+#### 종목 API
+- `GET /api/v1/stocks/{code}/quote` - **실시간 시세 조회**
+
+#### 테마 API
+- `GET /api/v1/themes` - 테마 목록 조회
+- `GET /api/v1/themes/{id}` - 테마 상세 조회 (종목 포함)
+
+자세한 API 명세는 http://localhost:8000/docs (Swagger UI) 에서 확인 가능합니다.
 
 ## 🎨 주요 화면
 
+### 최상단 지수 바
+- **코스피 / 코스닥** 현재가, 전일대비, 등락률 실시간 표시
+- 30초마다 자동 갱신
+- 상승 🔴 / 하락 🔵 색상 구분
+
 ### 메인 화면
-- 6개 테마별로 거래대금 상위 4개 종목 표시
-- 2x2 그리드: 종목명/등락률, 현재가/거래대금
-- 모바일: 2열, 데스크톱: 3열 그리드
-- 3초마다 자동 갱신
+- **KRX / NXT / ALL** 마켓 토글
+- 18개 테마별로 거래대금 상위 4개 종목 표시
+- 2x2 그리드: 종목명/등락률, 현재가/거래대금, 미니 캔들 차트
+- 모바일: 1~2열, 데스크톱: 3열 그리드
+- 60초마다 자동 갱신
 
 ### 테마 상세 화면
 - 해당 테마의 거래대금 상위 15개 종목
 - 실시간 시세 및 등락률
-- 순위 표시
+- 순위 및 캔들 차트 표시
 
 ## 🔑 한국투자증권 OpenAPI 발급
 
@@ -224,10 +242,11 @@ python scripts/seed_data.py
 ## 📅 개발 완료 현황
 
 - [x] **Phase 1**: Docker 환경 구축
-  - [x] Docker Compose 설정
+  - [x] Docker Compose 설정 (Nginx, Certbot, Portainer 포함)
   - [x] PostgreSQL, Redis 컨테이너
   - [x] Backend/Frontend Dockerfile
-  
+  - [x] HTTPS (Let's Encrypt) 자동 발급/갱신
+
 - [x] **Phase 2**: 데이터베이스 모델링
   - [x] SQLAlchemy 모델 (Theme, Stock, ThemeStock)
   - [x] Alembic 마이그레이션 설정
@@ -236,21 +255,25 @@ python scripts/seed_data.py
 - [x] **Phase 3**: Backend API 개발
   - [x] FastAPI 프로젝트 구조
   - [x] Theme/Stock CRUD API
-  - [x] 테마-종목 매핑 API
   - [x] 한투 API 클라이언트 (OAuth2, 시세 조회, 거래량 순위)
+  - [x] **코스피/코스닥 지수 조회 API** (`FHKUP03500100`)
   - [x] Redis 캐싱 (토큰 24시간, 시세 60초)
+  - [x] 마켓 시간 자동 판별 (KRX/NXT/ALL)
+  - [x] 섹터 오버라이드 맵 (반도체, 조선, 원자력 등 18개 섹터)
 
 - [x] **Phase 4**: Frontend 개발
   - [x] Next.js 14 App Router 설정
   - [x] React Query 데이터 페칭
-  - [x] 실시간 거래대금 상위 종목 화면
+  - [x] **코스피/코스닥 지수 상단바** (30초 갱신)
+  - [x] **KRX / NXT / ALL 마켓 토글**
+  - [x] 실시간 거래대금 상위 종목 화면 (60초 갱신)
   - [x] 테마별 TOP 4/15 종목 표시
+  - [x] **미니 캔들 차트** (고가/저가/시가/현재가)
   - [x] Tailwind CSS 반응형 디자인
 
 - [ ] **Phase 5**: 추가 기능 (예정)
   - [ ] 사용자 인증/로그인
   - [ ] 즐겨찾기 기능
-  - [ ] 차트 시각화
   - [ ] WebSocket 실시간 업데이트
 
 ## 🧪 테스트
@@ -277,12 +300,13 @@ open http://localhost
 
 ### KIS API 관련 이슈 해결
 - **주말/공휴일 대응**: `holidays` 라이브러리와 Hybrid 로직(DB+실시간)을 사용하여 365일 중단 없는 서비스 제공.
-- **장 시간**: 평일 15:40 스케줄러 자동 저장으로 데이터 누락 방지.
+- **장 시간**: KRX(09:00-15:40), NXT/ALL(08:00-20:00) 구간별 서비스 제공.
 - **API 속도**: Redis 캐싱(3초) 및 병렬 처리로 응답 속도 최적화.
+- **지수 조회 TR ID**: `FHKUP03500100` (업종기간별시세), `FID_COND_MRKT_DIV_CODE: U` 사용.
 
 ### 해결 방법
-- 평일 장중: 실시간 API + 3초 캐시
-- 휴일/장마감: DB 저장 데이터 + 실시간 시세(3초 캐시)
+- 평일 장중: 실시간 API + Redis 캐시(60초)
+- 휴일/장마감: DB 저장 데이터 반환
 
 ## 🤝 기여
 
@@ -298,10 +322,6 @@ MIT License
 
 ---
 
-**Last Updated**: 2026-02-26
+**Last Updated**: 2026-02-27
 
-**Version**: 1.3.0 (캐싱 시간 변경)
-
-**Demo page**: https://stock.hayoone.com
-
-```
+**Version**: 1.4.0 (코스피/코스닥 지수 표시 추가)
