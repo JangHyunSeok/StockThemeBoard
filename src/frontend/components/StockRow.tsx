@@ -1,6 +1,7 @@
 'use client';
 
 import { StockRanking } from '@/types';
+import { useEffect, useRef, useState } from 'react';
 
 interface StockRowProps {
     stock: StockRanking;
@@ -8,6 +9,39 @@ interface StockRowProps {
 }
 
 export default function StockRow({ stock, rank }: StockRowProps) {
+    const [animationClass, setAnimationClass] = useState('');
+    const prevPriceRef = useRef<number>(stock.current_price);
+    const prevValueRef = useRef<number>(stock.trading_value);
+
+    useEffect(() => {
+        let timer: NodeJS.Timeout;
+
+        // 가격 또는 거래대금 변경 감지
+        if (prevPriceRef.current !== stock.current_price || prevValueRef.current !== stock.trading_value) {
+            const isUp = stock.current_price > prevPriceRef.current || stock.trading_value > prevValueRef.current;
+            const isDown = stock.current_price < prevPriceRef.current;
+
+            if (isUp) {
+                // setAnimationClass('animate-flash-up');
+            } else if (isDown) {
+                // setAnimationClass('animate-flash-down');
+            }
+
+            // 1초 후 애니메이션 클래스 제거 (다음 갱신을 위해)
+            timer = setTimeout(() => {
+                setAnimationClass('');
+            }, 1000);
+
+            // 이전 값 업데이트
+            prevPriceRef.current = stock.current_price;
+            prevValueRef.current = stock.trading_value;
+        }
+
+        return () => {
+            if (timer) clearTimeout(timer);
+        };
+    }, [stock.current_price, stock.trading_value]);
+
     const priceColor = stock.change_rate > 0
         ? 'text-red-600'
         : stock.change_rate < 0
@@ -24,7 +58,7 @@ export default function StockRow({ stock, rank }: StockRowProps) {
     };
 
     return (
-        <div className="py-1.5 px-2 hover:bg-gray-50 rounded border-b border-gray-50 last:border-0">
+        <div className={`py-1.5 px-2 hover:bg-gray-50 rounded border-b border-gray-50 last:border-0 transition-colors duration-300 ${animationClass}`}>
             <div className="flex items-center justify-between">
                 {/* 좌측: 순위 및 종목명 */}
                 <div className="flex items-center gap-2 flex-1 min-w-0">

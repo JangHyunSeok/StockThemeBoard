@@ -1,3 +1,35 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer utilities {
+    @keyframes flash-up {
+        0% {
+            background-color: rgba(239, 68, 68, 0.2);
+        }
+
+        /* red-500 with opacity */
+        100% {
+            background-color: transparent;
+        }
+    }
+
+    @keyframes flash-down {
+        0% {
+            background-color: rgba(59, 130, 246, 0.2);
+        }
+
+        /* blue-500 with opacity */
+        100% {
+            background-color: transparent;
+        }
+    }
+
+    .animate-flash-up {
+        animation: flash-up 1s ease-out forwards;
+    }
+
+    .animate-flash-down {
+        animation: flash-down 1s ease-out forwards;
+    }
+}
