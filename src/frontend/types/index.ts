@@ -46,3 +46,16 @@ export interface StockRanking {
     trading_value: number;
     trading_value_change_rate?: number; // 전일대비 증가율 (Volume Increase Rate as proxy)
 }
+
+// 지수 시세
+export interface IndexQuote {
+    index_code: string;
+    current_price: number;
+    change_price: number;
+    change_rate: number;
+    timestamp: string;
+}
+
+export interface IndicesResponse {
+    items: IndexQuote[];
+}

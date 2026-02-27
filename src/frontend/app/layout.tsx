@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { QueryProvider } from '@/lib/query-provider';
+import IndexHeader from '@/components/IndexHeader';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -16,6 +17,7 @@ export default function RootLayout({
         <html lang="ko">
             <body className="bg-gray-50">
                 <QueryProvider>
+                    <IndexHeader />
                     <header className="bg-white shadow-sm border-b">
                         <div className="container mx-auto px-4 py-4">
                             <h1 className="text-2xl font-bold text-gray-900">

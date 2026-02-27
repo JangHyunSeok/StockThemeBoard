@@ -251,7 +251,83 @@ class KISClient:
             })
         
         return results
-    
+
+    async def get_index_quote(self, index_code: str) -> Dict[str, Any]:
+        """국내 업종 지수 현재가 조회
+        
+        API: 국내주식업종기간별시세(일/주/월/년) [v1_국내주식-021]
+        TR ID: FHKUP03500100
+        URL: /uapi/domestic-stock/v1/quotations/inquire-daily-indexchartprice
+        
+        Args:
+            index_code: 지수코드 (0001: 코스피, 1001: 코스닥 등)
+            
+        Returns:
+            지수 시세 정보 딕셔너리
+        """
+        access_token = await self.get_access_token()
+        
+        today = datetime.now().strftime("%Y%m%d")
+        
+        url = "/uapi/domestic-stock/v1/quotations/inquire-daily-indexchartprice"
+        headers = {
+            "authorization": f"Bearer {access_token}",
+            "appkey": self.app_key,
+            "appsecret": self.app_secret,
+            "tr_id": "FHKUP03500100"
+        }
+        params = {
+            "FID_COND_MRKT_DIV_CODE": "U",   # 업종 조회
+            "FID_INPUT_ISCD": index_code,      # 0001: 코스피, 1001: 코스닥
+            "FID_INPUT_DATE_1": today,          # 조회 시작일
+            "FID_INPUT_DATE_2": today,          # 조회 종료일
+            "FID_PERIOD_DIV_CODE": "D",         # 일봉
+        }
+        
+        response = await self.client.get(url, headers=headers, params=params)
+        
+        if response.status_code != 200:
+            raise Exception(f"지수 시세 조회 실패: {response.text}")
+        
+        data = response.json()
+        
+        if data.get("rt_cd") != "0":
+            error_msg = data.get("msg1", "알 수 없는 오류")
+            raise Exception(f"API 오류: {error_msg}")
+        
+        # output1: 업종 개요 (현재가, 전일대비 등)
+        # output2: 기간별 OHLC 배열 (최신이 앞에)
+        output1 = data.get("output1", {})
+        output2_list = data.get("output2", [])
+        
+        def safe_float(val: Any) -> float:
+            try:
+                if val is None or val == "":
+                    return 0.0
+                return float(val)
+            except (ValueError, TypeError):
+                return 0.0
+        
+        # output1에서 현재가 추출 (업종 개요 - 가장 정확한 현재 시세)
+        current_price = safe_float(output1.get("bstp_nmix_prpr"))
+        change_price  = safe_float(output1.get("bstp_nmix_prdy_vrss"))
+        change_rate   = safe_float(output1.get("bstp_nmix_prdy_ctrt"))
+        
+        # output1에 데이터가 없으면 output2 최신 데이터 사용
+        if current_price == 0.0 and output2_list:
+            latest = output2_list[0]
+            current_price = safe_float(latest.get("bstp_nmix_clpr") or latest.get("bstp_nmix_prpr"))
+            change_price  = safe_float(latest.get("bstp_nmix_prdy_vrss"))
+            change_rate   = safe_float(latest.get("prdy_ctrt"))
+        
+        return {
+            "index_code": index_code,
+            "current_price": current_price,
+            "change_price": change_price,
+            "change_rate": change_rate,
+            "timestamp": datetime.now()
+        }
+
     async def close(self):
         """HTTP 클라이언트 종료"""
         await self.client.aclose()
