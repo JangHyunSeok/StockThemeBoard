@@ -99,7 +99,7 @@ export default function ThemeSection({ themeName }: ThemeSectionProps) {
             ) : (
                 <div className="text-center py-4 text-xs text-gray-400">
                     {marketType === 'NXT'
-                        ? 'NXT 데이터는 20:00 이후 제공됩니다'
+                        ? 'NXT 거래 데이터가 없습니다 (08:00~20:00 운영)'
                         : '해당 업종 데이터가 없습니다'}
                 </div>
             )}

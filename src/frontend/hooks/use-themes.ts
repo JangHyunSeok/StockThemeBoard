@@ -36,7 +36,8 @@ export function useVolumeRankByTheme(market?: 'KRX' | 'NXT' | 'ALL') {
     return useQuery({
         queryKey: ['volume-rank-by-theme', defaultMarket],
         queryFn: () => api.getVolumeRankByTheme(defaultMarket),
-        // 현재 선택된 시장의 운영 여부에 따라 폴링 활성화
-        refetchInterval: isMarketClosed(defaultMarket) ? false : 3000,
+        // 함수 형태로 설정하면 매 refetch마다 동적으로 재평가됨
+        refetchInterval: () => isMarketClosed(defaultMarket) ? false : 3000,
+        refetchIntervalInBackground: false, // 탭이 비활성화되면 중단
     });
 }

@@ -367,9 +367,9 @@ async def get_volume_rank_by_theme(
         result = classify_by_sector(rankings, sector_map)
         print(f"[DEBUG] Classification complete - {len(result)} sectors")
         
-        # 캐시 저장 (장중 3초, 장후 1시간)
-        is_after_hours = now.hour >= 20 or now.hour < 9
-        ttl = 3600 if is_after_hours else 3
+        # 캐시 저장 (실시간 운영 중이면 3초, 아니면 1시간)
+        # market_open은 이미 위에서 KRX(9-20), NXT/ALL(8-20) 기준으로 판별됨
+        ttl = 3 if market_open else 3600
         await set_cache(cache_key, json.dumps(result, ensure_ascii=False), ttl=ttl)
         
         return result
