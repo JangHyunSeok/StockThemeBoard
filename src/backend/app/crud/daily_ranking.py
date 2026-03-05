@@ -1,7 +1,7 @@
 """
 일일 거래량 순위 CRUD
 """
-from datetime import date
+from datetime import date, datetime
 from typing import List, Dict, Optional
 from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -32,6 +32,7 @@ async def save_daily_rankings(
     )
     
     # 새 데이터 삽입
+    now_time = datetime.now()
     for ranking in rankings:
         daily_ranking = DailyRanking(
             trade_date=trade_date,
@@ -44,6 +45,7 @@ async def save_daily_rankings(
             change_rate=ranking["change_rate"],
             volume=ranking["volume"],
             trading_value=ranking["trading_value"],
+            created_at=now_time,
         )
         db.add(daily_ranking)
     
