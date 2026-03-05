@@ -34,18 +34,30 @@ def is_market_open(target_date: date = None) -> bool:
 
 def get_last_market_date() -> date:
     """
-    가장 최근 개장일 조회
-    (오늘이 개장일이면 오늘 리턴, 휴장이면 직전 평일 리턴)
+    가장 최근 DB에 저장된 영업일 날짜 반환
+    - 오늘이 개장일이고 15:40 이후면 오늘 반환 (KRX 마감 후 저장 완료)
+    - 15:40 이전이면 전 영업일 반환 (아직 당일 저장 안 됨)
+    - 휴장일이면 가장 최근 영업일 반환
     """
     from datetime import timedelta
-    
-    current_date = datetime.now().date()
-    # 최근 10일 전까지 검색 (설날/추석 연휴 고려)
+
+    now = datetime.now()
+    current_date = now.date()
+
+    # 오늘이 개장일인 경우
+    if is_market_open(current_date):
+        # 15:40 이전이면 오늘 데이터는 아직 저장 안 됨 → 전일 기준
+        if now.hour < 15 or (now.hour == 15 and now.minute < 40):
+            current_date -= timedelta(days=1)
+        else:
+            return current_date  # 15:40 이후 → 오늘 반환
+
+    # 전일부터 최근 10일 내 개장일 탐색
     for _ in range(10):
         if is_market_open(current_date):
             return current_date
         current_date -= timedelta(days=1)
-        
+
     return current_date  # Fallback
 
 

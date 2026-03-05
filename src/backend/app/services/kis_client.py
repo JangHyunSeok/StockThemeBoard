@@ -155,9 +155,8 @@ class KISClient:
             KIS API는 최대 30건만 지원합니다.
             30건 초과 요청 시 자동으로 30건으로 조정됩니다.
         """
-        # API 제한 체크
+        # KIS API 제한: 최대 30건 (페이징 미지원) - 조용히 보정
         if limit > 30:
-            print(f"[WARNING] KIS 거래량순위 API는 최대 30건만 지원합니다. 요청: {limit}건 → 조정: 30건")
             limit = 30
         
         # 액세스 토큰 가져오기

@@ -10,6 +10,7 @@ services:
       POSTGRES_PASSWORD: stockpass
       POSTGRES_DB: stocktheme
       TZ: Asia/Seoul
+      PGTZ: Asia/Seoul
     ports:
       - "5432:5432"
     volumes:
@@ -64,7 +65,7 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1
 
   # Frontend Next.js
   frontend:

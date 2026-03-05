@@ -29,15 +29,21 @@ export function useStockQuote(code: string) {
     });
 }
 
-// 테마별 거래량 순위 조회 (평일: 3초마다 / 주말: 갱신 안 함)
+// 테마별 거래량 순위 조회
 export function useVolumeRankByTheme(market?: 'KRX' | 'NXT' | 'ALL') {
     const defaultMarket = market || 'ALL';
+
+    // 마켓별 폴링 주기 (백엔드 캐시 TTL과 매칭)
+    // ALL: 백엔드 TTL=15s (KIS 3회 호출), KRX/NXT: TTL=10s (KIS 1회 호출)
+    const getRefetchInterval = () => {
+        if (isMarketClosed(defaultMarket)) return false;
+        return defaultMarket === 'ALL' ? 15000 : 10000;
+    };
 
     return useQuery({
         queryKey: ['volume-rank-by-theme', defaultMarket],
         queryFn: () => api.getVolumeRankByTheme(defaultMarket),
-        // 함수 형태로 설정하면 매 refetch마다 동적으로 재평가됨
-        refetchInterval: () => isMarketClosed(defaultMarket) ? false : 3000,
-        refetchIntervalInBackground: false, // 탭이 비활성화되면 중단
+        refetchInterval: getRefetchInterval,
+        refetchIntervalInBackground: false,
     });
 }

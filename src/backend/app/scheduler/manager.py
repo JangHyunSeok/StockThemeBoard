@@ -34,7 +34,8 @@ def start_scheduler():
         fetch_and_save_krx_rankings,
         trigger=krx_trigger,
         id="krx_daily_ranking_job",
-        replace_existing=True
+        replace_existing=True,
+        misfire_grace_time=3600  # 재시작으로 놓쳤을 때 1시간 이내면 즉시 실행
     )
     
     # Job 2: NXT 야간거래 종가 - 평일(월~금) 20시 00분
@@ -49,7 +50,8 @@ def start_scheduler():
         fetch_and_save_nxt_rankings,
         trigger=nxt_trigger,
         id="nxt_daily_ranking_job",
-        replace_existing=True
+        replace_existing=True,
+        misfire_grace_time=3600  # 재시작으로 놓쳤을 때 1시간 이내면 즉시 실행
     )
     
     scheduler.start()

@@ -5,14 +5,17 @@ from app.config import settings
 from app.api.v1 import api_router
 from app.scheduler.manager import start_scheduler, shutdown_scheduler
 
+from app.scheduler.jobs import run_catchup_on_startup
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
     애플리케이션 수명 주기 관리
-    - 시작: 스케줄러 실행
+    - 시작: 스케줄러 실행 + 당일 누락 데이터 보완
     - 종료: 스케줄러 중지
     """
     start_scheduler()
+    await run_catchup_on_startup()  # 재시작으로 놓친 데이터 즉시 수집
     yield
     shutdown_scheduler()
 
