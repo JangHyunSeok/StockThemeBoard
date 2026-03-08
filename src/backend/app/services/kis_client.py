@@ -28,16 +28,20 @@ class KISClient:
             }
         )
     
-    async def get_access_token(self) -> str:
-        """액세스 토큰 발급 (캐시 우선)
+    async def get_access_token(self, force: bool = False) -> str:
+        """액세스 토큰 발급 (캐시 우선, force=True 시 무조건 새로 발급)
         
+        Args:
+            force: True일 경우 캐시를 무시하고 새로 발급받음
+            
         Returns:
             액세스 토큰 문자열
         """
-        # Redis 캐시 확인
-        cached_token = await get_cache(self.TOKEN_CACHE_KEY)
-        if cached_token:
-            return cached_token
+        # Redis 캐시 확인 (force가 False일 때만)
+        if not force:
+            cached_token = await get_cache(self.TOKEN_CACHE_KEY)
+            if cached_token:
+                return cached_token
         
         # 토큰 발급 API 호출
         url = "/oauth2/tokenP"

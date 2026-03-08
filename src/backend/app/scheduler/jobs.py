@@ -126,3 +126,20 @@ async def run_catchup_on_startup():
                 await fetch_and_save_nxt_rankings()
             else:
                 logger.info(f"✅ [Catchup] NXT data exists for {today}. Skip.")
+
+async def refresh_kis_token_job():
+    """
+    정기적인 KIS 액세스 토큰 갱신 작업
+    매일 장 시작 전(07:50 등)에 강제로 새로운 토큰을 발급받아 캐시를 덮어씁니다.
+    """
+    logger.info("📅 [Scheduler] KIS Token Refresh Job Started")
+    try:
+        kis_client = await get_kis_client()
+        # force=True를 통해 강제로 새 토큰 발급
+        token = await kis_client.get_access_token(force=True)
+        if token:
+            logger.info("✅ [Scheduler] Successfully refreshed KIS access token. (force=True)")
+        else:
+            logger.warning("⚠️ [Scheduler] Token refresh returned empty string.")
+    except Exception as e:
+        logger.error(f"❌ [Scheduler] Failed to refresh KIS token: {e}")
