@@ -221,7 +221,12 @@ async def get_volume_rank_by_theme(
             else: # "DB"
                 try:
                     db_ranks = await crud_daily_ranking.get_rankings_by_date(db, last_date, market_type=market_type)
-                    return db_ranks[:limit] if db_ranks else []
+                    if db_ranks:
+                        return db_ranks[:limit]
+                    # DB 데이터 없음 (스케줄러 누락 등) → LIVE API로 자동 fallback
+                    print(f"[WARN] {market_type} DB data empty for {last_date}. Falling back to LIVE API.")
+                    api_code = "J" if market_type == "KRX" else "NX"
+                    return await kis_client.get_volume_rank(limit=limit, market=api_code, access_token=access_token)
                 except Exception as e:
                     print(f"[WARN] Failed to fetch {market_type} DB data: {e}")
                     return []

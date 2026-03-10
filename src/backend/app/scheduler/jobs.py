@@ -97,6 +97,8 @@ async def run_catchup_on_startup():
     """
     앱 시작 시 당일 누락 데이터 자동 보완
     재시작으로 인해 스케줄러가 15:40 / 20:00을 놓쳤을 경우 즉시 수집
+
+    주의: 세션 중첩을 방지하기 위해 체크와 저장을 각각 독립된 세션으로 분리합니다.
     """
     now = datetime.now()
 
@@ -106,24 +108,29 @@ async def run_catchup_on_startup():
 
     today = now.date()
 
-    async with AsyncSessionLocal() as session:
-        # KRX: 15:40 이후인데 오늘 데이터가 없으면 즉시 수집
-        if now.hour > 15 or (now.hour == 15 and now.minute >= 40):
+    # ── KRX: 15:40 이후인데 오늘 데이터가 없으면 즉시 수집 ──
+    if now.hour > 15 or (now.hour == 15 and now.minute >= 40):
+        # 세션 A: 존재 여부만 확인 후 즉시 닫음
+        async with AsyncSessionLocal() as session:
             existing = await crud_daily_ranking.get_rankings_by_date(session, today, "KRX")
-            if not existing:
-                logger.info("🔄 [Catchup] KRX 데이터 누락. 즉시 보완 수집 시작...")
-                await fetch_and_save_krx_rankings()
-            else:
-                logger.info(f"✅ [Catchup] KRX data exists for {today}. Skip.")
 
-        # NXT: 20:00 이후인데 오늘 데이터가 없으면 즉시 수집
-        if now.hour >= 20:
+        if not existing:
+            logger.info("🔄 [Catchup] KRX 데이터 누락. 즉시 보완 수집 시작...")
+            await fetch_and_save_krx_rankings()  # 내부에서 독립된 세션 B로 저장
+        else:
+            logger.info(f"✅ [Catchup] KRX data exists for {today}. Skip.")
+
+    # ── NXT: 20:00 이후인데 오늘 데이터가 없으면 즉시 수집 ──
+    if now.hour >= 20:
+        # 세션 C: 존재 여부만 확인 후 즉시 닫음
+        async with AsyncSessionLocal() as session:
             existing = await crud_daily_ranking.get_rankings_by_date(session, today, "NXT")
-            if not existing:
-                logger.info("🔄 [Catchup] NXT 데이터 누락. 즉시 보완 수집 시작...")
-                await fetch_and_save_nxt_rankings()
-            else:
-                logger.info(f"✅ [Catchup] NXT data exists for {today}. Skip.")
+
+        if not existing:
+            logger.info("🔄 [Catchup] NXT 데이터 누락. 즉시 보완 수집 시작...")
+            await fetch_and_save_nxt_rankings()  # 내부에서 독립된 세션 D로 저장
+        else:
+            logger.info(f"✅ [Catchup] NXT data exists for {today}. Skip.")
 
 async def refresh_kis_token_job():
     """
