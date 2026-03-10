@@ -28,7 +28,6 @@ async def fetch_and_save_krx_rankings():
     # 1. KIS API로 데이터 조회
     try:
         kis_client = await get_kis_client()
-        await kis_client.get_access_token()
         
         # KIS API 최대 30건 지원 (페이징 미지원)
         rankings = await kis_client.get_volume_rank(limit=30, market="J")
@@ -69,7 +68,6 @@ async def fetch_and_save_nxt_rankings():
     # 1. KIS API로 데이터 조회
     try:
         kis_client = await get_kis_client()
-        await kis_client.get_access_token()
         
         # KIS API 최대 30건 지원 (페이징 미지원)
         rankings = await kis_client.get_volume_rank(limit=30, market="NX")

@@ -54,7 +54,8 @@ SECTOR_MAP_CACHE_TTL = 86400  # 24시간
 async def get_sector_map_from_cache_or_api(
     rankings: List[Dict],
     kis_client,
-    market_code: str
+    market_code: str,
+    access_token: str = None
 ) -> Dict[str, str]:
     """
     종목코드 → 업종명 매핑 반환
@@ -84,7 +85,8 @@ async def get_sector_map_from_cache_or_api(
 
         async def fetch_sector(code: str):
             try:
-                quote = await kis_client.get_stock_quote(code, market=market_code)
+                # 상위에서 1회 발급된 토큰 공유 → Redis 조회 30회 → 0회
+                quote = await kis_client.get_stock_quote(code, market=market_code, access_token=access_token)
                 # KIS API 업종명 (오버라이드 맵에 없는 종목만 여기 도달)
                 sector = quote.get("sector") or "기타"
                 await set_cache(
@@ -200,6 +202,8 @@ async def get_volume_rank_by_theme(
         print(f"[DEBUG] Rules applied - KRX Source: {krx_source}, NXT Source: {nxt_source}")
 
         kis_client = await get_kis_client()
+        # 토큰 1회 선발급 후 모든 KIS API 호출에 공유
+        access_token = await kis_client.get_access_token()
         last_date = get_last_market_date()
 
         async def fetch_source(market_type, source, limit=30):
@@ -209,9 +213,8 @@ async def get_volume_rank_by_theme(
             elif source == "LIVE":
                 api_code = "J" if market_type == "KRX" else "NX"
                 try:
-                    # 토큰 미리 확보
-                    await kis_client.get_access_token()
-                    return await kis_client.get_volume_rank(limit=limit, market=api_code)
+                    # 상위에서 1회 발급된 토큰 공유 (중복 Redis 조회 없음)
+                    return await kis_client.get_volume_rank(limit=limit, market=api_code, access_token=access_token)
                 except Exception as e:
                     print(f"[WARN] Failed to fetch {market_type} LIVE data: {e}")
                     return []
@@ -250,7 +253,7 @@ async def get_volume_rank_by_theme(
                 missing_krx_codes = [r["code"] for r in nxt_ranks if r["code"] not in krx_codes]
                 if missing_krx_codes:
                     extra_results = await asyncio.gather(*[
-                        kis_client.get_stock_quote(code, market="J")
+                        kis_client.get_stock_quote(code, market="J", access_token=access_token)
                         for code in missing_krx_codes
                     ], return_exceptions=True)
                     for code, res in zip(missing_krx_codes, extra_results):
@@ -266,9 +269,8 @@ async def get_volume_rank_by_theme(
         
         # 업종별 동적 분류 및 정렬 (KIS API 실시간 업종명 + Redis 24h 캐시)
         print(f"[DEBUG] Classifying {len(rankings)} stocks by sector")
-        kis_client = await get_kis_client()
         api_market_code = "NX" if market == "NXT" else "J"
-        sector_map = await get_sector_map_from_cache_or_api(rankings, kis_client, api_market_code)
+        sector_map = await get_sector_map_from_cache_or_api(rankings, kis_client, api_market_code, access_token=access_token)
         result = classify_by_sector(rankings, sector_map)
         print(f"[DEBUG] Classification complete - {len(result)} sectors")
         

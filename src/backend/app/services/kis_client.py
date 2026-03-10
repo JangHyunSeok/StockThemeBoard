@@ -67,18 +67,20 @@ class KISClient:
         
         return access_token
     
-    async def get_stock_quote(self, stock_code: str, market: str = "J") -> Dict[str, Any]:
+    async def get_stock_quote(self, stock_code: str, market: str = "J", access_token: str = None) -> Dict[str, Any]:
         """실시간 주식 시세 조회
         
         Args:
             stock_code: 종목코드 (6자리)
             market: "J" (정규장 KRX) or "NX" (야간거래 NXT)
+            access_token: 미리 발급된 토큰 (None이면 내부에서 자동 발급)
         
         Returns:
             시세 정보 딕셔너리
         """
-        # 액세스 토큰 가져오기
-        access_token = await self.get_access_token()
+        # 토큰이 주입되지 않은 경우 내부에서 발급 (단독 호출 시 하위 호환 유지)
+        if access_token is None:
+            access_token = await self.get_access_token()
         
         # API 호출
         url = "/uapi/domestic-stock/v1/quotations/inquire-price"
@@ -145,12 +147,13 @@ class KISClient:
             "timestamp": datetime.now()
         }
     
-    async def get_volume_rank(self, limit: int = 30, market: str = "J") -> list[Dict[str, Any]]:
+    async def get_volume_rank(self, limit: int = 30, market: str = "J", access_token: str = None) -> list[Dict[str, Any]]:
         """거래량 순위 조회
         
         Args:
             limit: 조회할 종목 수 (최대 30, KIS API 제한)
             market: "J" (정규장 KRX) or "NX" (야간거래 NXT)
+            access_token: 미리 발급된 토큰 (None이면 내부에서 자동 발급)
         
         Returns:
             거래량 순위 종목 리스트
@@ -163,8 +166,9 @@ class KISClient:
         if limit > 30:
             limit = 30
         
-        # 액세스 토큰 가져오기
-        access_token = await self.get_access_token()
+        # 토큰이 주입되지 않은 경우 내부에서 발급 (단독 호출 시 하위 호환 유지)
+        if access_token is None:
+            access_token = await self.get_access_token()
         
         # API 호출
         url = "/uapi/domestic-stock/v1/quotations/volume-rank"
@@ -255,7 +259,7 @@ class KISClient:
         
         return results
 
-    async def get_index_quote(self, index_code: str) -> Dict[str, Any]:
+    async def get_index_quote(self, index_code: str, access_token: str = None) -> Dict[str, Any]:
         """국내 업종 지수 현재가 조회
         
         API: 국내주식업종기간별시세(일/주/월/년) [v1_국내주식-021]
@@ -264,11 +268,14 @@ class KISClient:
         
         Args:
             index_code: 지수코드 (0001: 코스피, 1001: 코스닥 등)
+            access_token: 미리 발급된 토큰 (None이면 내부에서 자동 발급)
             
         Returns:
             지수 시세 정보 딕셔너리
         """
-        access_token = await self.get_access_token()
+        # 토큰이 주입되지 않은 경우 내부에서 발급 (단독 호출 시 하위 호환 유지)
+        if access_token is None:
+            access_token = await self.get_access_token()
         
         today = datetime.now().strftime("%Y%m%d")
         
