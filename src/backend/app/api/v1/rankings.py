@@ -14,9 +14,7 @@ from app.database import get_db
 from app.core.utils import is_market_open, get_last_market_date, get_current_market_type
 from app.core.themes import SECTOR_OVERRIDE_MAP
 
-
 router = APIRouter()
-
 
 def is_weekend() -> bool:
     """주말 여부 확인 (간단 버전)"""
@@ -284,7 +282,11 @@ async def get_volume_rank_by_theme(
             ttl = 15  # KIS 3회 호출 소요시간 감안
         else:
             ttl = 10  # KIS 1회 호출 소요시간 감안
-        await set_cache(cache_key, json.dumps(result, ensure_ascii=False), ttl=ttl)
+        if result:
+            await set_cache(cache_key, json.dumps(result, ensure_ascii=False), ttl=ttl)
+            print(f"[DEBUG] Cached data saved for {ttl} seconds")
+        else:
+            print(f"[DEBUG] Result is empty, skipping cache")
         
         return result
     

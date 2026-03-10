@@ -11,6 +11,7 @@ from app.services.kis_client import get_kis_client
 router = APIRouter()
 
 # 테스트용 더미 데이터
+
 DUMMY_STOCKS = [
     {"name": "삼성전자", "code": "005930"},
     {"name": "SK하이닉스", "code": "000660"},
