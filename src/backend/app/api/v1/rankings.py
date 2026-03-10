@@ -164,14 +164,6 @@ async def get_volume_rank_by_theme(
     
     print(f"[DEBUG] Request received - market: {market}, current time: {datetime.now()}")
     
-    # 2. 캐시 키에 market 포함
-    cache_key = f"volume_rank_by_theme:{market}"
-    cached_data = await get_cache(cache_key)
-    
-    if cached_data:
-        print(f"[DEBUG] Returning cached data")
-        return json.loads(cached_data)
-    
     try:
         rankings = []
         now = datetime.now()
@@ -200,6 +192,15 @@ async def get_volume_rank_by_theme(
             nxt_source = "DB"
             
         print(f"[DEBUG] Rules applied - KRX Source: {krx_source}, NXT Source: {nxt_source}")
+
+        # 2. 소스 타입을 포함한 캐시 키 생성
+        # → 시간대가 바뀌어 소스가 달라지면 자동으로 다른 캐시 키를 사용하므로
+        #   이전 시간대의 낡은 캐시가 오염되지 않음
+        cache_key = f"volume_rank_by_theme:{market}:{krx_source}_{nxt_source}"
+        cached_data = await get_cache(cache_key)
+        if cached_data:
+            print(f"[DEBUG] Returning cached data (key={cache_key})")
+            return json.loads(cached_data)
 
         kis_client = await get_kis_client()
         # 토큰 1회 선발급 후 모든 KIS API 호출에 공유
@@ -280,15 +281,12 @@ async def get_volume_rank_by_theme(
         print(f"[DEBUG] Classification complete - {len(result)} sectors")
         
         # 캐시 저장 (마켓별 TTL 조정)
-        # - ALL(통합시세): KRX + NXT + 개별조회로 3~4초 소요 → TTL 15초
-        # - KRX/NXT: 단일 조회로 1~2초 소요 → TTL 10초
-        # - 장 외: 1시간
+        # - 실시간 조회 구간: TTL 3초 (웹소켓 도입 전까지 빠른 갱신)
+        # - 장 외 (DB+DB): 1시간
         if krx_source == "DB" and nxt_source == "DB":
             ttl = 3600
-        elif market == "ALL":
-            ttl = 15  # KIS 3회 호출 소요시간 감안
         else:
-            ttl = 10  # KIS 1회 호출 소요시간 감안
+            ttl = 3  # ALL / KRX / NXT 실시간 구간 모두 3초
         if result:
             await set_cache(cache_key, json.dumps(result, ensure_ascii=False), ttl=ttl)
             print(f"[DEBUG] Cached data saved for {ttl} seconds")

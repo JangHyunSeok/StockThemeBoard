@@ -33,11 +33,11 @@ export function useStockQuote(code: string) {
 export function useVolumeRankByTheme(market?: 'KRX' | 'NXT' | 'ALL') {
     const defaultMarket = market || 'ALL';
 
-    // 마켓별 폴링 주기 (백엔드 캐시 TTL과 매칭)
-    // ALL: 백엔드 TTL=15s (KIS 3회 호출), KRX/NXT: TTL=10s (KIS 1회 호출)
+    // 마켓별 폴링 주기 — 백엔드 캐시 TTL 3초와 동일하게 통일
+    // (웹소켓 도입 전까지 3초 갱신 유지)
     const getRefetchInterval = () => {
         if (isMarketClosed(defaultMarket)) return false;
-        return defaultMarket === 'ALL' ? 15000 : 10000;
+        return 3000; // ALL / KRX / NXT 모두 3초
     };
 
     return useQuery({
