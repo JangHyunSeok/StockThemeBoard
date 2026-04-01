@@ -88,17 +88,20 @@ async def get_volume_rank_raw(
 ):
     """
     KIS API 원본 데이터 확인용 (테마 분류 없이 30개 원본 그대로 반환)
-
-    - 테마 분류 없이 KIS API에서 받아온 30개 종목을 그대로 반환
-    - 디버깅용: 실제로 어떤 종목이 상위에 있는지 확인할 때 사용
     """
     api_market_code = "NX" if market == "NXT" else "J"
 
-    kis_client = await get_kis_client()
-    rankings = await kis_client.get_volume_rank(limit=30, market=api_market_code)
-
-    return {
-        "market": market,
-        "total_count": len(rankings),
-        "rankings": rankings
-    }
+    try:
+        kis_client = await get_kis_client()
+        rankings = await kis_client.get_volume_rank(limit=30, market=api_market_code)
+        return {
+            "market": market,
+            "total_count": len(rankings),
+            "rankings": rankings
+        }
+    except Exception as e:
+        import traceback
+        return {
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }

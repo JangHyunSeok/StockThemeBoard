@@ -214,11 +214,21 @@ async def get_volume_rank_by_theme(
             elif source == "LIVE":
                 api_code = "J" if market_type == "KRX" else "NX"
                 try:
-                    # 상위에서 1회 발급된 토큰 공유 (중복 Redis 조회 없음)
-                    return await kis_client.get_volume_rank(limit=limit, market=api_code, access_token=access_token)
+                    live_ranks = await kis_client.get_volume_rank(limit=limit, market=api_code, access_token=access_token)
+                    if live_ranks:
+                        return live_ranks
+                    # LIVE API가 빈 결과 반환 (NXT 초기 세션 등) → DB fallback
+                    print(f"[WARN] {market_type} LIVE returned empty results. Falling back to DB.")
+                    db_ranks = await crud_daily_ranking.get_rankings_by_date(db, last_date, market_type=market_type)
+                    return db_ranks[:limit] if db_ranks else []
                 except Exception as e:
-                    print(f"[WARN] Failed to fetch {market_type} LIVE data: {e}")
-                    return []
+                    print(f"[WARN] {market_type} LIVE API failed: {e}. Falling back to DB.")
+                    try:
+                        db_ranks = await crud_daily_ranking.get_rankings_by_date(db, last_date, market_type=market_type)
+                        return db_ranks[:limit] if db_ranks else []
+                    except Exception as db_err:
+                        print(f"[WARN] {market_type} DB fallback also failed: {db_err}")
+                        return []
             else: # "DB"
                 try:
                     db_ranks = await crud_daily_ranking.get_rankings_by_date(db, last_date, market_type=market_type)

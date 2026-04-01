@@ -59,7 +59,7 @@ export default function HomePage() {
                 </div>
             ) : (
                 <div className="mt-4 text-center text-xs text-gray-500">
-                    💡 거래대금 상위 종목이 자동 갱신됩니다 (통합 15초 / KRX·NXT 10초)
+                    💡 거래대금 상위 종목이 자동 갱신됩니다 (3초)
                 </div>
             )}
         </div>
